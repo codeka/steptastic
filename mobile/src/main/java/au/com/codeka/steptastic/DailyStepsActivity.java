@@ -1,22 +1,27 @@
 package au.com.codeka.steptastic;
 
-import android.support.v4.app.FragmentActivity;
+import android.app.Activity;
 import android.os.Bundle;
+import android.widget.TextView;
 
 import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-public class DailyStepsActivity extends FragmentActivity {
+import au.com.codeka.steptastic.eventbus.EventHandler;
+
+public class DailyStepsActivity extends Activity {
     private WatchConnection watchConnection = new WatchConnection();
     private GoogleMap map; // Might be null if Google Play services APK is not available.
+    private TextView stepCount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_daily_steps);
         watchConnection.setup(this);
+        stepCount = (TextView) findViewById(R.id.current_steps);
         setUpMapIfNeeded();
     }
 
@@ -31,35 +36,33 @@ public class DailyStepsActivity extends FragmentActivity {
     protected void onStart() {
         super.onStart();
         watchConnection.start();
+        StepDataStore.eventBus.register(eventHandler);
+        refreshStepCount(StepDataStore.i.getStepsToday());
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        StepDataStore.eventBus.unregister(eventHandler);
         watchConnection.stop();
     }
 
-    /**
-     * Sets up the map if it is possible to do so (i.e., the Google Play services APK is correctly
-     * installed) and the map has not already been instantiated.. This will ensure that we only ever
-     * call {@link #setUpMap()} once when {@link #map} is not null.
-     * <p>
-     * If it isn't installed {@link SupportMapFragment} (and
-     * {@link com.google.android.gms.maps.MapView MapView}) will show a prompt for the user to
-     * install/update the Google Play services APK on their device.
-     * <p>
-     * A user can return to this FragmentActivity after following the prompt and correctly
-     * installing/updating/enabling the Google Play services. Since the FragmentActivity may not
-     * have been completely destroyed during this process (it is likely that it would only be
-     * stopped or paused), {@link #onCreate(Bundle)} may not be called again so we should call this
-     * method in {@link #onResume()} to guarantee that it will be called.
-     */
+    private final Object eventHandler = new Object() {
+        @EventHandler(thread = EventHandler.UI_THREAD)
+        public void onStepCountUpdated(StepDataStore.StepsUpdatedEvent event) {
+            refreshStepCount(event.stepsToday);
+        }
+    };
+
+    private void refreshStepCount(long steps) {
+        stepCount.setText(Long.toString(steps));
+    }
+
     private void setUpMapIfNeeded() {
         // Do a null check to confirm that we have not already instantiated the map.
         if (map == null) {
             // Try to obtain the map from the SupportMapFragment.
-            map = ((SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map))
-                    .getMap();
+            map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
             // Check if we were successful in obtaining the map.
             if (map != null) {
                 setUpMap();
@@ -67,12 +70,6 @@ public class DailyStepsActivity extends FragmentActivity {
         }
     }
 
-    /**
-     * This is where we can add markers or lines, add listeners or move the camera. In this case, we
-     * just add a marker near Africa.
-     * <p>
-     * This should only be called once and when we are sure that {@link #map} is not null.
-     */
     private void setUpMap() {
         map.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title("Marker"));
     }

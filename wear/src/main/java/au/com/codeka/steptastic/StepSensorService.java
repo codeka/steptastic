@@ -16,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 public class StepSensorService extends Service {
     private SensorManager sensorManager;
     private Sensor stepCounterSensor;
+    private StepCountSyncer stepCountSyncer;
+
+    private static int lastStepCount;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -33,6 +36,7 @@ public class StepSensorService extends Service {
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         stepCounterSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+        stepCountSyncer = new StepCountSyncer(this);
 
         // Register for sensor events in batch mode, allowing up to 1 minute delay before events
         // getting reported. We don't care about the delay too much, except that we also want to
@@ -50,6 +54,16 @@ public class StepSensorService extends Service {
         public void onSensorChanged(SensorEvent event) {
             int count = (int) event.values[0];
             long timestamp = event.timestamp;
+
+            int stepsThisEvent = 0;
+            if (lastStepCount > 0) {
+                if (count > lastStepCount) {
+                    stepsThisEvent = count - lastStepCount;
+                }
+            }
+            lastStepCount = count;
+
+            stepCountSyncer.syncStepCount(stepsThisEvent, timestamp / 1000000);
             StepsActivity.setSteps(count, timestamp);
         }
 
