@@ -17,7 +17,7 @@
         android:name=".App">
         <activity
             android:name=".DailyStepsActivity"
-            android:label="@string/title_activity_daily_steps" >
+            android:label="@string/app_name" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
