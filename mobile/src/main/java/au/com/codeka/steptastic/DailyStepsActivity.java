@@ -1,19 +1,23 @@
 package au.com.codeka.steptastic;
 
 import android.app.Activity;
+import android.location.Location;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.widget.TextView;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import au.com.codeka.steptastic.eventbus.EventHandler;
 
 public class DailyStepsActivity extends Activity {
     private WatchConnection watchConnection = new WatchConnection();
-    private GoogleMap map; // Might be null if Google Play services APK is not available.
+    @Nullable private GoogleMap map;
+    @Nullable private Marker marker;
     private TextView stepCount;
 
     @Override
@@ -51,6 +55,7 @@ public class DailyStepsActivity extends Activity {
         @EventHandler(thread = EventHandler.UI_THREAD)
         public void onStepCountUpdated(StepDataStore.StepsUpdatedEvent event) {
             refreshStepCount(event.stepsToday);
+            showLocation(event.currentLocation);
         }
     };
 
@@ -58,19 +63,20 @@ public class DailyStepsActivity extends Activity {
         stepCount.setText(Long.toString(steps));
     }
 
+    private void showLocation(Location loc) {
+        LatLng latlng = new LatLng(loc.getLatitude(), loc.getLongitude());
+        if (marker != null) {
+            marker.setPosition(latlng);
+        } else {
+            marker = map.addMarker(new MarkerOptions().position(latlng).title("You"));
+        }
+    }
+
     private void setUpMapIfNeeded() {
         // Do a null check to confirm that we have not already instantiated the map.
         if (map == null) {
             // Try to obtain the map from the SupportMapFragment.
             map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
-            // Check if we were successful in obtaining the map.
-            if (map != null) {
-                setUpMap();
-            }
         }
-    }
-
-    private void setUpMap() {
-        map.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title("Marker"));
     }
 }

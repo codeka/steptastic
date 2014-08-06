@@ -3,6 +3,7 @@ package au.com.codeka.steptastic;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.location.Location;
 
 import java.util.Calendar;
 
@@ -20,15 +21,17 @@ public class StepDataStore {
     public static final EventBus eventBus = new EventBus();
 
     /** Adds the given steps, at the given timestamp, to the data store. */
-    public void addSteps(long timestamp, int steps) {
+    public void addSteps(long timestamp, int steps, Location loc) {
         // At this point, timestamp will be milliseconds since epoch. We want all of our step
         // counts to be in 5 minute increments, so we'll round this timestamp down to the nearest
         // 5 minutes.
         final long millisPerFiveMinutes = 1000 * 60 * 5;
         timestamp = timestamp - (timestamp % millisPerFiveMinutes);
 
-        long stepsToday = new Store().addSteps(timestamp, steps);
-        eventBus.publish(new StepsUpdatedEvent(stepsToday));
+        double lat = loc == null ? 0 : loc.getLatitude();
+        double lng = loc == null ? 0 : loc.getLongitude();
+        long stepsToday = new Store().addSteps(timestamp, steps, lat, lng);
+        eventBus.publish(new StepsUpdatedEvent(stepsToday, loc));
     }
 
     public long getStepsToday() {
@@ -39,9 +42,11 @@ public class StepDataStore {
     public static class StepsUpdatedEvent {
         /** The total number of steps we've recorded today. */
         public long stepsToday;
+        public Location currentLocation;
 
-        public StepsUpdatedEvent(long stepsToday) {
+        public StepsUpdatedEvent(long stepsToday, Location currentLocation) {
             this.stepsToday = stepsToday;
+            this.currentLocation = currentLocation;
         }
     }
 
@@ -71,13 +76,13 @@ public class StepDataStore {
         }
 
         /** Updates the step count and returns the total number of steps we've done today. */
-        public long addSteps(long timestamp, int steps) {
+        public long addSteps(long timestamp, int steps, double lat, double lng) {
             synchronized (lock) {
                 SQLiteDatabase db = getWritableDatabase();
                 db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng) VALUES ("
                     + timestamp + ", "
                     + "COALESCE((SELECT steps FROM steps WHERE timestamp = " + timestamp + "), 0) + " + steps + ", "
-                    + "0, 0)");
+                    + lat + ", " + lng + ")");
             }
             return getStepsSinceMidnight();
         }
