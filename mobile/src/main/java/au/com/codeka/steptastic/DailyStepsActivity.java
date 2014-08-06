@@ -7,9 +7,11 @@ import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.widget.TextView;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.TileOverlay;
@@ -86,16 +88,25 @@ public class DailyStepsActivity extends Activity {
     private Runnable updateHeatmapRunnable = new Runnable() {
         @Override
         public void run() {
-            handler.postDelayed(updateHeatmapRunnable, 10000);
-
             if (map == null) {
                 return;
             }
 
+            LatLngBounds bounds = null;
+
             ArrayList<WeightedLatLng> heatmap = new ArrayList<WeightedLatLng>();
             for (StepDataStore.StepHeatmapEntry entry : StepDataStore.i.getHeatmap()) {
-                heatmap.add(new WeightedLatLng(new LatLng(entry.lat, entry.lng),
-                        (double) entry.steps / 10.0));
+                if (entry.lat == 0.0 && entry.lng == 0.0) {
+                    // Ignore these outliers.
+                    continue;
+                }
+                LatLng latlng = new LatLng(entry.lat, entry.lng);
+                if (bounds == null) {
+                    bounds = new LatLngBounds(latlng, latlng);
+                } else {
+                    bounds = bounds.including(latlng);
+                }
+                heatmap.add(new WeightedLatLng(latlng, (double) entry.steps / 10.0));
             }
 
             HeatmapTileProvider provider = new HeatmapTileProvider.Builder()
@@ -105,6 +116,8 @@ public class DailyStepsActivity extends Activity {
                 heatmapOverlay.remove();
             }
             heatmapOverlay = map.addTileOverlay(new TileOverlayOptions().tileProvider(provider));
+
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
         }
     };
 
