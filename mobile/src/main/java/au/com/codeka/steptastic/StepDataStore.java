@@ -5,7 +5,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.location.Location;
 
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 
 import au.com.codeka.steptastic.eventbus.EventBus;
 
@@ -23,10 +25,10 @@ public class StepDataStore {
     /** Adds the given steps, at the given timestamp, to the data store. */
     public void addSteps(long timestamp, int steps, Location loc) {
         // At this point, timestamp will be milliseconds since epoch. We want all of our step
-        // counts to be in 5 minute increments, so we'll round this timestamp down to the nearest
-        // 5 minutes.
-        final long millisPerFiveMinutes = 1000 * 60 * 5;
-        timestamp = timestamp - (timestamp % millisPerFiveMinutes);
+        // counts to be in one minute increments, so we'll round this timestamp down to the nearest
+        // minute.
+        final long millisPerMinute = 1000 * 60;
+        timestamp = timestamp - (timestamp % millisPerMinute);
 
         double lat = loc == null ? 0 : loc.getLatitude();
         double lng = loc == null ? 0 : loc.getLongitude();
@@ -38,6 +40,11 @@ public class StepDataStore {
         return new Store().getStepsSinceMidnight();
     }
 
+    /** Gets the "heatmap" for today, which is a collection of lat/lngs and step counts. */
+    public List<StepHeatmapEntry> getHeatmap() {
+        return new Store().getHeatmap();
+    }
+
     /** Event that's posted to the {@link EventBus} whenever the step count updates. */
     public static class StepsUpdatedEvent {
         /** The total number of steps we've recorded today. */
@@ -47,6 +54,22 @@ public class StepDataStore {
         public StepsUpdatedEvent(long stepsToday, Location currentLocation) {
             this.stepsToday = stepsToday;
             this.currentLocation = currentLocation;
+        }
+    }
+
+    /**
+     * Represents an entry in the "steps heatmap", which is just a collection of lat/lngs and
+     * step counts.
+     */
+    public static class StepHeatmapEntry {
+        public double lat;
+        public double lng;
+        public int steps;
+
+        public StepHeatmapEntry(double lat, double lng, int steps) {
+            this.lat = lat;
+            this.lng = lng;
+            this.steps = steps;
         }
     }
 
@@ -88,6 +111,16 @@ public class StepDataStore {
         }
 
         public long getStepsSinceMidnight() {
+            // this is not very efficient... we should specialize this to just do SELECT(COUNT()).
+            List<StepHeatmapEntry> heatmap = getHeatmap();
+            long steps = 0;
+            for (StepHeatmapEntry entry : heatmap) {
+                steps += entry.steps;
+            }
+            return steps;
+        }
+
+        public List<StepHeatmapEntry> getHeatmap() {
             Calendar m = Calendar.getInstance(); //midnight
             m.set(Calendar.HOUR_OF_DAY, 0);
             m.set(Calendar.MINUTE, 0);
@@ -99,19 +132,18 @@ public class StepDataStore {
                 SQLiteDatabase db = getReadableDatabase();
                 Cursor cursor = null;
                 try {
-                    // TODO: doing a SELECT(COUNT()) would be faster, but we'll stick with this for
-                    // TODO: now.
-                    cursor = db.query("steps", new String[] {"steps"}, "timestamp > " + midnight,
-                            null, null, null, null);
+                    ArrayList<StepHeatmapEntry> heatmap = new ArrayList<StepHeatmapEntry>();
+                    cursor = db.query("steps", new String[] {"steps", "lat", "lng"},
+                            "timestamp > " + midnight, null, null, null, null);
                     if (!cursor.moveToFirst()) {
-                        return 0;
+                        return heatmap;
                     }
 
-                    long totalSteps = 0;
                     do {
-                        totalSteps += cursor.getLong(0);
+                        heatmap.add(new StepHeatmapEntry(cursor.getDouble(1), cursor.getDouble(2),
+                                cursor.getInt(0)));
                     } while (cursor.moveToNext());
-                    return totalSteps;
+                    return heatmap;
                 } finally {
                     if (cursor != null) {
                         cursor.close();
