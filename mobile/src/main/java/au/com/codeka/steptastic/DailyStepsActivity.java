@@ -1,15 +1,20 @@
 package au.com.codeka.steptastic;
 
 import android.app.Activity;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Parcel;
 import android.support.annotation.Nullable;
 import android.widget.TextView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.CameraPositionCreator;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -19,6 +24,10 @@ import com.google.android.gms.maps.model.TileOverlayOptions;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.google.maps.android.heatmaps.WeightedLatLng;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 
 import au.com.codeka.steptastic.eventbus.EventHandler;
@@ -30,6 +39,7 @@ public class DailyStepsActivity extends Activity {
     @Nullable private TileOverlay heatmapOverlay;
     private TextView stepCount;
     private Handler handler;
+    private CameraPosition cameraPosition;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,7 +49,6 @@ public class DailyStepsActivity extends Activity {
         stepCount = (TextView) findViewById(R.id.current_steps);
         setUpMapIfNeeded();
         handler = new Handler();
-        handler.postDelayed(updateHeatmapRunnable, 1000);
     }
 
     @Override
@@ -47,6 +56,7 @@ public class DailyStepsActivity extends Activity {
         super.onResume();
         setUpMapIfNeeded();
         watchConnection.sendMessage(new WatchConnection.Message("/steptastic/StartCounting", null));
+        handler.postDelayed(updateHeatmapRunnable, 1000);
     }
 
     @Override
@@ -55,6 +65,12 @@ public class DailyStepsActivity extends Activity {
         watchConnection.start();
         StepDataStore.eventBus.register(eventHandler);
         refreshStepCount(StepDataStore.i.getStepsToday());
+
+        loadCameraPosition();
+        if (map != null && cameraPosition != null) {
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+            cameraPosition = null;
+        }
     }
 
     @Override
@@ -62,6 +78,48 @@ public class DailyStepsActivity extends Activity {
         super.onStop();
         StepDataStore.eventBus.unregister(eventHandler);
         watchConnection.stop();
+
+        saveCameraPosition();
+    }
+
+    private void saveCameraPosition() {
+        if (map == null) {
+            return;
+        }
+
+        FileOutputStream fos = null;
+        try {
+            fos = openFileOutput("CameraPosition.dat", Context.MODE_PRIVATE);
+            Parcel parcel = Parcel.obtain();
+            map.getCameraPosition().writeToParcel(parcel, 0);
+            byte[] bytes = parcel.marshall();
+            fos.write(bytes, 0, bytes.length);
+        } catch (IOException e) {
+        } finally {
+            if (fos != null) {
+                try { fos.close(); } catch (IOException e) { }
+            }
+        }
+    }
+
+    private void loadCameraPosition() {
+        FileInputStream fis = null;
+        try {
+            fis = openFileInput("CameraPosition.dat");
+            Parcel parcel = Parcel.obtain();
+            byte[] buffer = new byte[1000];
+            int numBytes = 0;
+            while ((numBytes = fis.read(buffer, 0, buffer.length)) > 0) {
+                parcel.unmarshall(buffer, 0, numBytes);
+            }
+            parcel.setDataPosition(0);
+            cameraPosition = new CameraPositionCreator().createFromParcel(parcel);
+        } catch (IOException e) {
+        } finally {
+            if (fis != null) {
+                try { fis.close(); } catch (IOException e) { }
+            }
+        }
     }
 
     private final Object eventHandler = new Object() {
@@ -109,15 +167,17 @@ public class DailyStepsActivity extends Activity {
                 heatmap.add(new WeightedLatLng(latlng, (double) entry.steps / 10.0));
             }
 
-            HeatmapTileProvider provider = new HeatmapTileProvider.Builder()
-                    .weightedData(heatmap)
-                    .build();
-            if (heatmapOverlay != null) {
-                heatmapOverlay.remove();
-            }
-            heatmapOverlay = map.addTileOverlay(new TileOverlayOptions().tileProvider(provider));
+            if (heatmap.size() > 0) {
+                HeatmapTileProvider provider = new HeatmapTileProvider.Builder()
+                        .weightedData(heatmap)
+                        .build();
+                if (heatmapOverlay != null) {
+                    heatmapOverlay.remove();
+                }
+                heatmapOverlay = map.addTileOverlay(new TileOverlayOptions().tileProvider(provider));
 
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
+                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
+            }
         }
     };
 
@@ -126,6 +186,9 @@ public class DailyStepsActivity extends Activity {
         if (map == null) {
             // Try to obtain the map from the SupportMapFragment.
             map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
+            if (cameraPosition != null) {
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+            }
         }
     }
 }
