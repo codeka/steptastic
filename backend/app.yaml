@@ -1,0 +1,17 @@
+application: steptastic-wear
+version: 1
+runtime: python27
+api_version: 1
+threadsafe: true
+
+libraries:
+- name: pycrypto
+  version: latest
+- name: endpoints
+  version: 1.0
+
+handlers:
+- url: /
+  script: frontend.app
+- url: /_ah/spi/.*
+  script: sync_api.app

@@ -9,3 +9,7 @@
 # Ignore apks
 *.apk
 
+# Ignore other temporary files
+*~
+*.pyc
+
