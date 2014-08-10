@@ -23,6 +23,7 @@ public class WatchListenerService extends WearableListenerService {
 
     private LocationListener locationListener;
     private LocationClient locationClient;
+    private NotificationGenerator notificationGenerator;
 
     @Override
     public void onCreate() {
@@ -30,6 +31,7 @@ public class WatchListenerService extends WearableListenerService {
         locationListener = new LocationListener();
         locationClient = new LocationClient(this, locationListener, locationListener);
         locationClient.connect();
+        notificationGenerator = new NotificationGenerator();
     }
 
     @Override
@@ -47,6 +49,7 @@ public class WatchListenerService extends WearableListenerService {
                 Location loc = locationListener.isConnected()
                         ? locationClient.getLastLocation() : null;
                 StepDataStore.i.addSteps(timestamp, steps, loc);
+                notificationGenerator.setCurrentStepCount(StepDataStore.i.getStepsToday());
             }
         }
     }

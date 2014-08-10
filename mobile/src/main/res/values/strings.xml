@@ -5,4 +5,7 @@
     <string name="title_activity_daily_steps">Daily Steps</string>
     <string name="sync_to_cloud">Sync to Cloud</string>
 
+    <string name="notification_title">Congratulations!</string>
+    <string name="notification_content_short">You\'ve burnt one %1$s\'s worth of calories today!</string>
+    <string name="notification_content_long">You\'ve burnt one %1$s\'s worth of calories by walking %2$d steps today!</string>
 </resources>
