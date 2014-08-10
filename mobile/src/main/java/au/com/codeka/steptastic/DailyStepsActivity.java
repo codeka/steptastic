@@ -36,7 +36,9 @@ import com.google.maps.android.heatmaps.WeightedLatLng;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 
 import au.com.codeka.steptastic.eventbus.EventHandler;
 
@@ -46,6 +48,7 @@ public class DailyStepsActivity extends Activity {
     @Nullable private Marker marker;
     @Nullable private TileOverlay heatmapOverlay;
     private TextView stepCount;
+    private TextView syncStatus;
     private Handler handler;
     private CameraPosition cameraPosition;
 
@@ -58,6 +61,7 @@ public class DailyStepsActivity extends Activity {
         setContentView(R.layout.activity_daily_steps);
         watchConnection.setup(this);
         stepCount = (TextView) findViewById(R.id.current_steps);
+        syncStatus = (TextView) findViewById(R.id.sync_status);
         setUpMapIfNeeded();
         handler = new Handler();
     }
@@ -68,6 +72,7 @@ public class DailyStepsActivity extends Activity {
         setUpMapIfNeeded();
         watchConnection.sendMessage(new WatchConnection.Message("/steptastic/StartCounting", null));
         handler.postDelayed(updateHeatmapRunnable, 1000);
+        updateSyncStatus(null);
     }
 
     @Override
@@ -127,8 +132,16 @@ public class DailyStepsActivity extends Activity {
         Syncsteps.Builder builder = new Syncsteps.Builder(
                 AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
         builder.setApplicationName("Steptastic");
-        Syncsteps service = builder.build();
-        new StepSyncer(this, service).sync(new Runnable() {
+        syncSteps(builder.build());
+    }
+
+    private void syncSteps(Syncsteps service) {
+        new StepSyncer(this, service).sync(new StepSyncer.SyncStatusCallback() {
+            @Override
+            public void setSyncStatus(String status) {
+                updateSyncStatus(status);
+            }
+        }, new Runnable() {
             @Override
             public void run() {
                 refreshStepCount(StepDataStore.i.getStepsToday());
@@ -218,6 +231,27 @@ public class DailyStepsActivity extends Activity {
         } else {
             marker = map.addMarker(new MarkerOptions().position(latlng).title("You"));
         }
+    }
+
+    private void updateSyncStatus(final String status) {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                String statusMsg = status;
+                if (statusMsg == null) {
+                    SharedPreferences settings = getSharedPreferences("Steptastic", 0);
+                    long timestamp = settings.getLong("LastSyncTimestamp", 0);
+                    if (timestamp == 0) {
+                        statusMsg = "Last server sync: never";
+                    } else {
+                        DateFormat dateFormat = DateFormat.getDateTimeInstance();
+                        statusMsg = "Last server sync: " + dateFormat.format(new Date(timestamp));
+                    }
+                }
+
+                syncStatus.setText(statusMsg);
+            }
+        });
     }
 
     private Runnable updateHeatmapRunnable = new Runnable() {

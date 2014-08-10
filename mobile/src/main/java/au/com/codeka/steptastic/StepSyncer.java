@@ -2,16 +2,15 @@ package au.com.codeka.steptastic;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.location.Location;
 import android.os.AsyncTask;
 import android.util.Log;
 
 import com.appspot.steptastic_wear.syncsteps.Syncsteps;
 import com.appspot.steptastic_wear.syncsteps.model.SyncStepCount;
 import com.appspot.steptastic_wear.syncsteps.model.SyncStepCountCollection;
-import com.google.android.gms.maps.model.LatLng;
 
 import java.io.IOException;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -26,6 +25,7 @@ public class StepSyncer {
     private final Context context;
     private final Syncsteps service;
     private final long lastSyncTimestamp;
+    private final DateFormat dateFormat = DateFormat.getDateInstance();
 
     public StepSyncer(Context context, Syncsteps service) {
         this.context = context;
@@ -45,15 +45,15 @@ public class StepSyncer {
     }
 
     /** Performs the actual sync, runs in a background thread. */
-    public void sync(final Runnable completeRunnable) {
+    public void sync(final SyncStatusCallback syncStatusCallback, final Runnable completeRunnable) {
         final long syncTime = System.currentTimeMillis();
 
         new AsyncTask<Void, Void, Boolean>() {
             @Override
             protected Boolean doInBackground(Void... params) {
                 try {
-                    syncUp();
-                    syncDown();
+                    syncUp(syncStatusCallback);
+                    syncDown(syncStatusCallback);
                 } catch(IOException e) {
                     // ignore errors, but don't update the lastSyncTimestamp
                     Log.e(TAG, "Exception occurred uploading steps.", e);
@@ -67,18 +67,17 @@ public class StepSyncer {
             protected void onPostExecute(Boolean success) {
                 if (success) {
                     SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
-                    settings.edit().putLong("LastSyncTimestamp", syncTime);
+                    settings.edit().putLong("LastSyncTimestamp", syncTime).commit();
 
-                    if (completeRunnable != null) {
-                        completeRunnable.run();
-                    }
+                    syncStatusCallback.setSyncStatus(null);
+                    completeRunnable.run();
                 }
             }
         }.execute();
     }
 
     /** Syncs from our local store to the server. */
-    private void syncUp() throws IOException {
+    private void syncUp(SyncStatusCallback syncStatusCallback) throws IOException {
         if (lastSyncTimestamp == 0) {
             // if we don't have any last sync timestamp, it means we don't have any steps at all,
             // so there's nothing to do
@@ -91,7 +90,8 @@ public class StepSyncer {
         long endTimestamp = TimestampUtils.tomorrowMidnight();
 
         for (long dt = startTimestamp; dt < endTimestamp; dt = TimestampUtils.nextDay(dt)) {
-            Log.i(TAG, "Uploading steps from " + new Date(dt) + " to the server...");
+            syncStatusCallback.setSyncStatus("Uploading steps from "
+                    + dateFormat.format(new Date(dt)) + " to the server...");
             List<StepDataStore.StepHeatmapEntry> heatmap =
                     StepDataStore.i.getHeatmap(dt, TimestampUtils.nextDay(dt));
 
@@ -112,7 +112,7 @@ public class StepSyncer {
     }
 
     /** Syncs from the server down to our local data store. */
-    private void syncDown() throws IOException {
+    private void syncDown(SyncStatusCallback syncStatusCallback) throws IOException {
         long startTimestamp = lastSyncTimestamp;
         if (startTimestamp == 0) {
             // If we haven't sync'd at all yet, just arbitrarily choose the last week to sync.
@@ -124,7 +124,8 @@ public class StepSyncer {
         long endTimestamp = TimestampUtils.tomorrowMidnight();
 
         for (long dt = startTimestamp; dt < endTimestamp; dt = TimestampUtils.nextDay(dt)) {
-            Log.i(TAG, "Downloading steps from " + new Date(dt) + " from the server...");
+            syncStatusCallback.setSyncStatus("Downloading steps from "
+                    + dateFormat.format(new Date(dt)) + " from the server...");
 
             SyncStepCountCollection coll = service.sync().getSteps(dt).execute();
             if (coll == null || coll.getSteps() == null) {
@@ -136,5 +137,9 @@ public class StepSyncer {
                         stepCount.getLat(), stepCount.getLng());
             }
         }
+    }
+
+    public interface SyncStatusCallback {
+        void setSyncStatus(String status);
     }
 }

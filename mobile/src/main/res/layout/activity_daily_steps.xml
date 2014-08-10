@@ -12,11 +12,19 @@
         android:textSize="40sp"
         android:text="" />
 
+    <TextView android:id="@+id/sync_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:padding="10dp"
+        android:text="Last server sync: never" />
+
     <fragment
         android:id="@+id/map"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@id/current_steps"
+        android:layout_above="@id/sync_status"
         tools:context=".DailyStepsActivity"
         android:name="com.google.android.gms.maps.MapFragment"/>
 
