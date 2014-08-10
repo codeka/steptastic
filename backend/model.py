@@ -35,13 +35,14 @@ class DailyStepCount(db.Model):
     if not dsc:
       dsc = DailyStepCount(date=dt, user=email)
     else:
+      dsc = dsc[0]
       existing_steps = pickle.loads(dsc.blob)
     for step_count in steps:
       was_existing = False
       for existing in existing_steps:
         if existing.timestamp == step_count.timestamp:
           was_existing = True
-          existing.count += step_count.count
+          existing.count = step_count.count
           if existing.lat == 0.0 or existing.lng == 0.0:
             existing.lat = step_count.lat
             existing.lng = step_count.lng

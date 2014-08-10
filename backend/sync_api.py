@@ -8,9 +8,9 @@ from protorpc import remote
 
 import model
 
-WEB_CLIENT_ID = '988087637760-353aeuesvt3ma7kminu6sb8l74enf4t7.apps.googleusercontent.com'
-DEBUG_CLIENT_ID = 'AIzaSyD1Cb-6Qw555UxGFa__7TlgNjMewat3OQg'
-RELEASE_CLIENT_ID = 'AIzaSyA4tEdl_YuxvM_KMmLb1gKlVNXAFI2wktk'
+WEB_CLIENT_ID = '988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com'
+DEBUG_CLIENT_ID = '988087637760-hq543kfeigaa3dilqc227qjbqbucf75q.apps.googleusercontent.com'
+RELEASE_CLIENT_ID = '988087637760-crlh1c8v61g2fgoo34ftri5g4he0mm4t.apps.googleusercontent.com'
 ANDROID_AUDIENCE = WEB_CLIENT_ID
 
 package = 'Sync'

@@ -3,5 +3,6 @@
 
     <string name="app_name">Steptastic</string>
     <string name="title_activity_daily_steps">Daily Steps</string>
+    <string name="sync_to_cloud">Sync to Cloud</string>
 
 </resources>

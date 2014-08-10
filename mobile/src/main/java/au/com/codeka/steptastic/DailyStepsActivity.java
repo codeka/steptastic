@@ -1,15 +1,21 @@
 package au.com.codeka.steptastic;
 
+import android.accounts.AccountManager;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
 import android.support.annotation.Nullable;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.widget.TextView;
 
+import com.appspot.steptastic_wear.syncsteps.Syncsteps;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
@@ -21,6 +27,9 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
+import com.google.api.client.extensions.android.http.AndroidHttp;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.google.maps.android.heatmaps.WeightedLatLng;
 
@@ -39,6 +48,9 @@ public class DailyStepsActivity extends Activity {
     private TextView stepCount;
     private Handler handler;
     private CameraPosition cameraPosition;
+
+    private static final String PREF_ACCOUNT_NAME = "AccountName";
+    private static final int REQUEST_ACCOUNT_PICKER = 132;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,6 +91,72 @@ public class DailyStepsActivity extends Activity {
         watchConnection.stop();
 
         saveCameraPosition();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle item selection
+        switch (item.getItemId()) {
+            case R.id.sync_to_cloud:
+                startSyncing();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void startSyncing() {
+        SharedPreferences settings = getSharedPreferences("Steptastic", 0);
+        GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(this,
+                "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
+        String accountName = settings.getString(PREF_ACCOUNT_NAME, null);
+        if (accountName == null) {
+            startActivityForResult(credential.newChooseAccountIntent(),
+                    REQUEST_ACCOUNT_PICKER);
+            return;
+        }
+        credential.setSelectedAccountName(accountName);
+
+        Syncsteps.Builder builder = new Syncsteps.Builder(
+                AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
+        builder.setApplicationName("Steptastic");
+        Syncsteps service = builder.build();
+        new StepSyncer(this, service).sync(new Runnable() {
+            @Override
+            public void run() {
+                refreshStepCount(StepDataStore.i.getStepsToday());
+                updateHeatmapRunnable.run();
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        switch (requestCode) {
+        case REQUEST_ACCOUNT_PICKER:
+            // if you've just picked an account (for syncing) then we'll save it and start
+            // the sync again.
+            if (data != null && data.getExtras() != null) {
+                String accountName = data.getExtras().getString(AccountManager.KEY_ACCOUNT_NAME);
+                if (accountName != null) {
+                    SharedPreferences settings = getSharedPreferences("Steptastic", 0);
+                    settings.edit()
+                            .putString(PREF_ACCOUNT_NAME, accountName)
+                            .commit();
+                    startSyncing();
+                }
+            }
+            break;
+        }
     }
 
     private void saveCameraPosition() {
