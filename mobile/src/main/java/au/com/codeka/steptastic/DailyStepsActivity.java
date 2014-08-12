@@ -10,9 +10,17 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
 import android.support.annotation.Nullable;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentStatePagerAdapter;
+import android.support.v4.view.ViewPager;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.TextView;
 
 import com.appspot.steptastic_wear.syncsteps.Syncsteps;
@@ -37,22 +45,26 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 
 import au.com.codeka.steptastic.eventbus.EventHandler;
 
-public class DailyStepsActivity extends Activity {
+public class DailyStepsActivity extends FragmentActivity {
     private WatchConnection watchConnection = new WatchConnection();
     @Nullable private GoogleMap map;
     @Nullable private Marker marker;
     @Nullable private TileOverlay heatmapOverlay;
-    private TextView stepCount;
     private TextView syncStatus;
+    private ViewPager stepCountViewPager;
+    private StepCountPagerAdapter stepCountPagerAdapter;
     private Handler handler;
     private CameraPosition cameraPosition;
 
     private static final int REQUEST_ACCOUNT_PICKER = 132;
+    private static final long DAYS = 1000 * 60 * 60 * 24;
     private static final long AUTO_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
     @Override
@@ -60,10 +72,21 @@ public class DailyStepsActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_daily_steps);
         watchConnection.setup(this);
-        stepCount = (TextView) findViewById(R.id.current_steps);
+        stepCountViewPager = (ViewPager) findViewById(R.id.current_steps_pager);
+        stepCountPagerAdapter = new StepCountPagerAdapter(getSupportFragmentManager());
+        stepCountViewPager.setAdapter(stepCountPagerAdapter);
+        // start on the last page (today)
+        stepCountViewPager.setCurrentItem(stepCountPagerAdapter.getCount() - 1);
         syncStatus = (TextView) findViewById(R.id.sync_status);
         setUpMapIfNeeded();
         handler = new Handler();
+
+        stepCountViewPager.setOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
+            @Override
+            public void onPageSelected(int position) {
+                handler.post(updateHeatmapRunnable);
+            }
+        });
     }
 
     @Override
@@ -81,7 +104,6 @@ public class DailyStepsActivity extends Activity {
         super.onStart();
         watchConnection.start();
         StepDataStore.eventBus.register(eventHandler);
-        refreshStepCount(StepDataStore.i.getStepsToday());
 
         loadCameraPosition();
         if (map != null && cameraPosition != null) {
@@ -234,7 +256,12 @@ public class DailyStepsActivity extends Activity {
     };
 
     private void refreshStepCount(long steps) {
-        stepCount.setText(Long.toString(steps));
+        if (stepCountViewPager.getCurrentItem() == stepCountPagerAdapter.getCount() - 1) {
+            // if we're on the last page, we can update it with the new count.
+            StepCountFragment fragment = (StepCountFragment) stepCountPagerAdapter.instantiateItem(
+                    stepCountViewPager, stepCountViewPager.getCurrentItem());
+            fragment.updateCount(steps);
+        }
     }
 
     private void showLocation(Location loc) {
@@ -274,10 +301,14 @@ public class DailyStepsActivity extends Activity {
                 return;
             }
 
+            int daysOffsetFromToday = stepCountPagerAdapter.getCount() - stepCountViewPager.getCurrentItem() - 1;
+            long startTime = TimestampUtils.midnight() - (daysOffsetFromToday * DAYS);
+            long endTime = TimestampUtils.nextDay(startTime);
+
             LatLngBounds bounds = null;
 
             ArrayList<WeightedLatLng> heatmap = new ArrayList<WeightedLatLng>();
-            for (StepDataStore.StepHeatmapEntry entry : StepDataStore.i.getHeatmap()) {
+            for (StepDataStore.StepHeatmapEntry entry : StepDataStore.i.getHeatmap(startTime, endTime)) {
                 if (entry.lat == 0.0 && entry.lng == 0.0) {
                     // Ignore these outliers.
                     continue;
@@ -313,6 +344,100 @@ public class DailyStepsActivity extends Activity {
             if (cameraPosition != null) {
                 map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
             }
+        }
+    }
+
+    private static class StepCountPagerAdapter extends FragmentStatePagerAdapter {
+        private final int numPages;
+
+        public StepCountPagerAdapter(FragmentManager fm) {
+            super(fm);
+
+            long oldestStep = StepDataStore.i.getOldestStep();
+            if (oldestStep == 0) {
+                numPages = 1;
+            } else {
+                long differenceMs = TimestampUtils.midnight() - TimestampUtils.midnight(oldestStep);
+                // TODO: account for leap seconds?
+                long differenceDays = differenceMs / DAYS;
+                numPages = (int)(differenceDays + 1);
+            }
+        }
+
+        @Override
+        public Fragment getItem(int position) {
+            Bundle args = new Bundle();
+            long dt = TimestampUtils.midnight();
+            dt -= (numPages - position - 1) * DAYS;
+            args.putLong("Timestamp", dt);
+            StepCountFragment fragment = new StepCountFragment();
+            fragment.setArguments(args);
+            return fragment;
+        }
+
+        @Override
+        public int getCount() {
+            return numPages;
+        }
+    }
+
+    public static class StepCountFragment extends Fragment {
+        private TextView stepCountTextView;
+
+        @Override
+        public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                Bundle savedInstanceState) {
+            ViewGroup rootView = (ViewGroup) inflater.inflate(R.layout.step_count_page, container,
+                    false);
+            stepCountTextView = (TextView) rootView.findViewById(R.id.current_steps);
+            TextView dayTextView = (TextView) rootView.findViewById(R.id.date);
+
+            Bundle args = getArguments();
+            long dt = args.getLong("Timestamp", 0);
+
+            updateCount(StepDataStore.i.getStepsBetween(dt, TimestampUtils.nextDay(dt)));
+
+            long daysDiff = (TimestampUtils.midnight() - dt) / DAYS;
+            if (daysDiff == 0) {
+                dayTextView.setText("TODAY");
+            } else if (daysDiff == 1) {
+                dayTextView.setText("YESTERDAY");
+            } else if (daysDiff < 7) {
+                Calendar c = Calendar.getInstance();
+                c.setTimeInMillis(dt);
+                switch (c.get(Calendar.DAY_OF_WEEK)) {
+                    case Calendar.MONDAY:
+                        dayTextView.setText("MONDAY");
+                        break;
+                    case Calendar.TUESDAY:
+                        dayTextView.setText("TUESDAY");
+                        break;
+                    case Calendar.WEDNESDAY:
+                        dayTextView.setText("WEDNESDAY");
+                        break;
+                    case Calendar.THURSDAY:
+                        dayTextView.setText("THURSDAY");
+                        break;
+                    case Calendar.FRIDAY:
+                        dayTextView.setText("FRIDAY");
+                        break;
+                    case Calendar.SATURDAY:
+                        dayTextView.setText("SATURDAY");
+                        break;
+                    case Calendar.SUNDAY:
+                        dayTextView.setText("SUNDAY");
+                        break;
+                }
+            } else {
+                DateFormat dateFormat = SimpleDateFormat.getDateInstance();
+                dayTextView.setText(dateFormat.format(new Date(dt)));
+            }
+
+            return rootView;
+        }
+
+        public void updateCount(long stepCount) {
+            stepCountTextView.setText(Long.toString(stepCount));
         }
     }
 }

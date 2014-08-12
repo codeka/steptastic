@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.location.Location;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -53,6 +54,10 @@ public class StepDataStore {
 
     public long getStepsToday() {
         return new Store().getStepsSinceMidnight();
+    }
+
+    public long getStepsBetween(long startTime, long endTime) {
+        return new Store().getStepsBetween(startTime, endTime);
     }
 
     /** Gets the "heatmap" for today, which is a collection of lat/lngs and step counts. */
@@ -169,11 +174,21 @@ public class StepDataStore {
             return steps;
         }
 
+        public long getStepsBetween(long startTime, long endTime) {
+            // this is not very efficient... we should specialize this to just do SELECT(COUNT()).
+            List<StepHeatmapEntry> heatmap = getHeatmap(startTime, endTime);
+            long steps = 0;
+            for (StepHeatmapEntry entry : heatmap) {
+                steps += entry.steps;
+            }
+            return steps;
+        }
+
         /** Gets the timestamp of the oldest step we have recorded in our data store. */
         public long getOldestStep() {
             synchronized (lock) {
                 SQLiteDatabase db = getReadableDatabase();
-                Cursor cursor = db.rawQuery("SELECT MIN(timestamp) FROM steps", null);
+                Cursor cursor = db.rawQuery("SELECT MIN(timestamp) FROM steps WHERE timestamp > 100", null);
                 if (!cursor.moveToFirst()) {
                     return 0;
                 }
