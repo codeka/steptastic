@@ -1,5 +1,6 @@
 package au.com.codeka.steptastic;
 
+import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -15,8 +16,6 @@ import java.util.Locale;
  * Generates some encouraging notifications when you reach various step goals throughout the day.
  */
 public class NotificationGenerator {
-    private long lastStepCount;
-
     private static final NotificationDetails[] NOTIFICATIONS = {
         new NotificationDetails(52, "Apple", "apple.jpg"),
         new NotificationDetails(90, "handful of Almond", "almonds.jpg"),
@@ -27,17 +26,20 @@ public class NotificationGenerator {
 
     /** Sets the current step count to the given value for today. */
     public void setCurrentStepCount(long steps) {
+        SharedPreferences sharedPreferences = App.i.getSharedPreferences("Steptastic", 0);
+        long lastStepCount = sharedPreferences.getLong("NotificationGenerator.LastStepCount", 0);
         if (steps <= lastStepCount) {
-            lastStepCount = steps;
+            sharedPreferences.edit().putLong("NotificationGenerator.LastStepCount", steps).commit();
             return;
         }
 
         for (NotificationDetails notificationDetails : NOTIFICATIONS) {
-            if (notificationDetails.steps > lastStepCount && notificationDetails.steps <= steps) {
+            if (lastStepCount < notificationDetails.steps && notificationDetails.steps <= steps) {
                 showNotification(notificationDetails, steps);
             }
         }
-        lastStepCount = steps;
+
+        sharedPreferences.edit().putLong("NotificationGenerator.LastStepCount", steps).commit();
     }
 
     /** Shows the given notification when we've crossed the threshold of steps. */

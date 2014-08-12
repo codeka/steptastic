@@ -52,8 +52,8 @@ public class DailyStepsActivity extends Activity {
     private Handler handler;
     private CameraPosition cameraPosition;
 
-    private static final String PREF_ACCOUNT_NAME = "AccountName";
     private static final int REQUEST_ACCOUNT_PICKER = 132;
+    private static final long AUTO_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,6 +73,7 @@ public class DailyStepsActivity extends Activity {
         watchConnection.sendMessage(new WatchConnection.Message("/steptastic/StartCounting", null));
         handler.postDelayed(updateHeatmapRunnable, 1000);
         updateSyncStatus(null);
+        maybeStartSyncing();
     }
 
     @Override
@@ -110,21 +111,33 @@ public class DailyStepsActivity extends Activity {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.sync_to_cloud:
-                startSyncing();
+                startSyncing(true);
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
         }
     }
 
-    private void startSyncing() {
+    private void maybeStartSyncing() {
+        // Don't sync more often than AUTO_SYNC_INTERVAL_MS
+        long timeSyncLastSync = StepSyncer.timeSinceLastSync(this);
+        if (timeSyncLastSync < AUTO_SYNC_INTERVAL_MS) {
+            return;
+        }
+
+        startSyncing(false);
+    }
+
+    private void startSyncing(boolean chooseAccount) {
         SharedPreferences settings = getSharedPreferences("Steptastic", 0);
         GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(this,
                 "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
-        String accountName = settings.getString(PREF_ACCOUNT_NAME, null);
+        String accountName = settings.getString(StepSyncer.PREF_ACCOUNT_NAME, null);
         if (accountName == null) {
-            startActivityForResult(credential.newChooseAccountIntent(),
-                    REQUEST_ACCOUNT_PICKER);
+            if (chooseAccount) {
+                startActivityForResult(credential.newChooseAccountIntent(),
+                        REQUEST_ACCOUNT_PICKER);
+            }
             return;
         }
         credential.setSelectedAccountName(accountName);
@@ -163,9 +176,9 @@ public class DailyStepsActivity extends Activity {
                 if (accountName != null) {
                     SharedPreferences settings = getSharedPreferences("Steptastic", 0);
                     settings.edit()
-                            .putString(PREF_ACCOUNT_NAME, accountName)
+                            .putString(StepSyncer.PREF_ACCOUNT_NAME, accountName)
                             .commit();
-                    startSyncing();
+                    startSyncing(false);
                 }
             }
             break;

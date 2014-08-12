@@ -8,6 +8,9 @@ import android.util.Log;
 import com.appspot.steptastic_wear.syncsteps.Syncsteps;
 import com.appspot.steptastic_wear.syncsteps.model.SyncStepCount;
 import com.appspot.steptastic_wear.syncsteps.model.SyncStepCountCollection;
+import com.google.api.client.extensions.android.http.AndroidHttp;
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.json.gson.GsonFactory;
 
 import java.io.IOException;
 import java.text.DateFormat;
@@ -27,6 +30,9 @@ public class StepSyncer {
     private final long lastSyncTimestamp;
     private final DateFormat dateFormat = DateFormat.getDateInstance();
 
+    private static boolean isSyncing = false;
+    public static final String PREF_ACCOUNT_NAME = "AccountName";
+
     public StepSyncer(Context context, Syncsteps service) {
         this.context = context;
         this.service = service;
@@ -44,9 +50,47 @@ public class StepSyncer {
         lastSyncTimestamp = timestamp;
     }
 
+    /** Gets the time, in milliseconds, since the last sync. */
+    public static long timeSinceLastSync(Context context) {
+        if (isSyncing) {
+            return 0;
+        }
+
+        SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
+        long timestamp = settings.getLong("LastSyncTimestamp", 0);
+        return System.currentTimeMillis() - timestamp;
+    }
+
+    /** Performs a sync, without notifying the caller. Used by the background service. */
+    public static void sync(Context context) {
+        SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
+        GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(context,
+                "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
+        String accountName = settings.getString(PREF_ACCOUNT_NAME, null);
+        if (accountName == null) {
+            // If you haven't set up an account yet, then we can't sync anyway.
+            return;
+        }
+        credential.setSelectedAccountName(accountName);
+
+        Syncsteps.Builder builder = new Syncsteps.Builder(
+                AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
+        builder.setApplicationName("Steptastic");
+        new StepSyncer(context, builder.build()).sync(new SyncStatusCallback() {
+            @Override
+            public void setSyncStatus(String status) {
+            }
+        }, new Runnable() {
+            @Override
+            public void run() {
+            }
+        });
+    }
+
     /** Performs the actual sync, runs in a background thread. */
     public void sync(final SyncStatusCallback syncStatusCallback, final Runnable completeRunnable) {
         final long syncTime = System.currentTimeMillis();
+        isSyncing = true;
 
         new AsyncTask<Void, Void, Boolean>() {
             @Override
@@ -65,6 +109,8 @@ public class StepSyncer {
 
             @Override
             protected void onPostExecute(Boolean success) {
+                isSyncing = false;
+
                 if (success) {
                     SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
                     settings.edit().putLong("LastSyncTimestamp", syncTime).commit();
@@ -91,7 +137,7 @@ public class StepSyncer {
 
         for (long dt = startTimestamp; dt < endTimestamp; dt = TimestampUtils.nextDay(dt)) {
             syncStatusCallback.setSyncStatus("Uploading steps from "
-                    + dateFormat.format(new Date(dt)) + " to the server...");
+                    + dateFormat.format(new Date(dt)) + "...");
             List<StepDataStore.StepHeatmapEntry> heatmap =
                     StepDataStore.i.getHeatmap(dt, TimestampUtils.nextDay(dt));
 
@@ -125,7 +171,7 @@ public class StepSyncer {
 
         for (long dt = startTimestamp; dt < endTimestamp; dt = TimestampUtils.nextDay(dt)) {
             syncStatusCallback.setSyncStatus("Downloading steps from "
-                    + dateFormat.format(new Date(dt)) + " from the server...");
+                    + dateFormat.format(new Date(dt)) + "...");
 
             SyncStepCountCollection coll = service.sync().getSteps(dt).execute();
             if (coll == null || coll.getSteps() == null) {
