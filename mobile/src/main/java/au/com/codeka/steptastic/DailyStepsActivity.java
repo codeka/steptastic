@@ -332,6 +332,11 @@ public class DailyStepsActivity extends FragmentActivity {
                 heatmapOverlay = map.addTileOverlay(new TileOverlayOptions().tileProvider(provider));
 
                 map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
+            } else {
+                if (heatmapOverlay != null) {
+                    heatmapOverlay.remove();
+                    heatmapOverlay = null;
+                }
             }
         }
     };
