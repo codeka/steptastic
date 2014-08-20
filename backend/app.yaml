@@ -9,9 +9,22 @@ libraries:
   version: latest
 - name: endpoints
   version: 1.0
+- name: jinja2
+  version: latest
 
 handlers:
-- url: /
-  script: frontend.app
+- url: /v[0-9]+/(.*)
+  static_files: static/\1
+  upload: static/.*
+  expiration: "365d"
+
+- url: /(favicon.ico|robots.txt)
+  static_files: static/\1
+  upload: static/(favicon.ico|robots.txt)
+  expiration: "365d"
+
 - url: /_ah/spi/.*
   script: sync_api.app
+
+- url: /.*
+  script: frontend.app
