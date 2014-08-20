@@ -96,6 +96,7 @@ public class DailyStepsActivity extends FragmentActivity {
         watchConnection.sendMessage(new WatchConnection.Message("/steptastic/StartCounting", null));
         handler.postDelayed(updateHeatmapRunnable, 1000);
         updateSyncStatus(null);
+        refreshStepCount(StepDataStore.i.getStepsToday());
         maybeStartSyncing();
     }
 
@@ -325,6 +326,7 @@ public class DailyStepsActivity extends FragmentActivity {
             if (heatmap.size() > 0) {
                 HeatmapTileProvider provider = new HeatmapTileProvider.Builder()
                         .weightedData(heatmap)
+                        .radius(50)
                         .build();
                 if (heatmapOverlay != null) {
                     heatmapOverlay.remove();
@@ -442,7 +444,9 @@ public class DailyStepsActivity extends FragmentActivity {
         }
 
         public void updateCount(long stepCount) {
-            stepCountTextView.setText(Long.toString(stepCount));
+            if (stepCountTextView != null) {
+                stepCountTextView.setText(Long.toString(stepCount));
+            }
         }
     }
 }

@@ -38,11 +38,11 @@ public class StepSensorService extends Service {
         stepCounterSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
         stepCountSyncer = new StepCountSyncer(this);
 
-        // Register for sensor events in batch mode, allowing up to 1 minute delay before events
-        // getting reported. We don't care about the delay too much, except that we also want to
-        // be able to get a decent location fix at the time as well.
+        // Register for sensor events in batch mode, allowing up to 5 seconds delay before events
+        // get reported. We don't care about the delay *too* much, but 5 seconds seems about right,
+        // and some devices seem more inclined to follow this suggestion than others.
         sensorManager.registerListener(stepSensorEventListener, stepCounterSensor,
-                SensorManager.SENSOR_DELAY_NORMAL, (int) TimeUnit.MINUTES.toMicros(1));
+                SensorManager.SENSOR_DELAY_NORMAL, (int) TimeUnit.SECONDS.toMicros(5));
     }
 
     /**
