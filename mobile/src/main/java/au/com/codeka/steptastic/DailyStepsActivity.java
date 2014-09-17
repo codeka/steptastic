@@ -240,7 +240,7 @@ public class DailyStepsActivity extends FragmentActivity {
             }
             parcel.setDataPosition(0);
             cameraPosition = new CameraPositionCreator().createFromParcel(parcel);
-        } catch (IOException e) {
+        } catch (Exception e) {
         } finally {
             if (fis != null) {
                 try { fis.close(); } catch (IOException e) { }

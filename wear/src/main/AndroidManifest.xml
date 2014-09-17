@@ -19,6 +19,11 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="vnd.google.fitness.VIEW" />
+                <data android:mimeType="vnd.google.android.fitness.data_type/com.google.step_count.cumulative" />
+                <data android:mimeType="vnd.google.android.fitness.data_type/com.google.step_count.delta" />
+            </intent-filter>
         </activity>
         <service android:name=".StepSensorService" />
         <service

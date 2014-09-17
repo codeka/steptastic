@@ -62,6 +62,9 @@ public class StepSensorService extends Service {
                 }
             }
             lastStepCount = count;
+            if (stepsThisEvent == 0) {
+                return;
+            }
 
             stepCountSyncer.syncStepCount(stepsThisEvent, timestamp / 1000000);
             StepsActivity.setSteps(count, timestamp);

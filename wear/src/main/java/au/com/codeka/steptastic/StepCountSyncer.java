@@ -36,6 +36,9 @@ public class StepCountSyncer {
     }
 
     public void syncStepCount(int steps, long timestamp) {
+        if (steps == 0) {
+            return;
+        }
         PutDataMapRequest dataMap = PutDataMapRequest.create("/steptastic/steps");
         dataMap.getDataMap().putInt("steps", steps);
         dataMap.getDataMap().putLong("timestamp", timestamp);
