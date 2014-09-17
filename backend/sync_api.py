@@ -35,12 +35,11 @@ class SyncStepsApi(remote.Service):
                     path='steps', http_method='POST',
                     name='sync.putSteps')
   def put_steps(self, request):
-    current_user = endpoints.get_current_user()
     dt = datetime.date.fromtimestamp(request.date / 1000)
     steps = []
     for step_count in request.steps:
       steps.append(model.StepCount(step_count.lat, step_count.lng, step_count.timestamp, step_count.count))
-    model.DailyStepCount.append_steps(current_user.email(), dt, steps)
+    model.DailyStepCount.append_steps(self._getEmail(), dt, steps)
     return message_types.VoidMessage()
 
   DT_RESOURCE = endpoints.ResourceContainer(
@@ -51,13 +50,19 @@ class SyncStepsApi(remote.Service):
                     path='steps/{dt}', http_method='GET',
                     name='sync.getSteps')
   def get_steps(self, request):
-    current_user = endpoints.get_current_user()
     dt = datetime.date.fromtimestamp(request.dt / 1000)
     steps_collection = StepCountCollection()
-    steps = model.DailyStepCount.get_daily_steps(current_user.email(), dt)
+    steps = model.DailyStepCount.get_daily_steps(self._getEmail(), dt)
     for step_count in steps:
       steps_collection.steps.append(StepCount(lat=step_count.lat, lng=step_count.lng, timestamp=step_count.timestamp,
                                               count=step_count.count))
     return steps_collection
+
+  def _getEmail(self):
+    email = endpoints.get_current_user().email()
+    if email == 'warworldstest1@gmail.com':
+      # What a massive, ugly hack for testing ;-)
+      email = 'dean@codeka.com.au'
+    return email
 
 app = endpoints.api_server([SyncStepsApi])

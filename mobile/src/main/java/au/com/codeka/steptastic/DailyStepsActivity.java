@@ -136,6 +136,9 @@ public class DailyStepsActivity extends FragmentActivity {
             case R.id.sync_to_cloud:
                 startSyncing(true);
                 return true;
+            case R.id.graphs:
+                Intent intent = new Intent(this, GraphActivity.class);
+                startActivity(intent);
             default:
                 return super.onOptionsItemSelected(item);
         }

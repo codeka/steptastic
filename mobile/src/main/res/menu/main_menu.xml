@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/graphs"
+        android:icon="@drawable/ic_menu_gallery"
+        android:title="@string/graphs"
+        android:showAsAction="ifRoom|withText"/>
+
     <item android:id="@+id/sync_to_cloud"
         android:icon="@drawable/ic_menu_account_list"
         android:title="@string/sync_to_cloud" />
