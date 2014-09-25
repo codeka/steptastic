@@ -3,15 +3,14 @@ package au.com.codeka.steptastic;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.database.sqlite.SQLiteStatement;
 import android.location.Location;
 import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.TimeZone;
 
 import au.com.codeka.steptastic.eventbus.EventBus;
 
@@ -62,11 +61,6 @@ public class StepDataStore {
         return new Store().getStepsBetween(startTime, endTime);
     }
 
-    /** Gets the "heatmap" for today, which is a collection of lat/lngs and step counts. */
-    public List<StepHeatmapEntry> getHeatmap() {
-        return new Store().getHeatmap();
-    }
-
     /** Gets the "heatmap" between the two given times. */
     public List<StepHeatmapEntry> getHeatmap(long startTime, long endTime) {
         return new Store().getHeatmap(startTime, endTime);
@@ -78,8 +72,15 @@ public class StepDataStore {
     }
 
     /** Gets a histogram of the number of steps you do on each day-of-the-week. */
-    public long[] getDayOfWeekHistogram() {
-        return new Store().getDayOfWeekHistogram();
+    public AverageStepCountPerUnitOfTime[] getDayOfWeekHistogram() {
+        final long MILLIS_PER_DAY = 86400000;
+        return new Store().getUnitOfTimeHistogram(MILLIS_PER_DAY, 7);
+    }
+
+    /** Gets a histogram of the number of steps you do on each 15-minute-interval-of-the-day. */
+    public AverageStepCountPerUnitOfTime[] getFifteenMinuteIntervalHistogram() {
+        final long MILLIS_PER_FIFTEEN_MINUTES = 900000;
+        return new Store().getUnitOfTimeHistogram(MILLIS_PER_FIFTEEN_MINUTES, 96);
     }
 
     /** Event that's posted to the {@link EventBus} whenever the step count updates. */
@@ -112,8 +113,13 @@ public class StepDataStore {
         }
     }
 
+    public static class AverageStepCountPerUnitOfTime {
+        public int count;
+        public long totalSteps;
+    }
+
     private static class Store extends SQLiteOpenHelper {
-        private static Object lock = new Object();
+        private static final Object lock = new Object();
 
         public Store() {
             super(App.i, "steps.db", null, 7);
@@ -129,8 +135,7 @@ public class StepDataStore {
                     +"  timestamp INTEGER PRIMARY KEY,"
                     +"  steps INTEGER,"
                     +"  lat REAL,"
-                    +"  lng REAL,"
-                    +"  day_of_week INTEGER);");
+                    +"  lng REAL);");
             db.execSQL("CREATE UNIQUE INDEX IX_steps_timestamp ON steps (timestamp)");
         }
 
@@ -140,36 +145,9 @@ public class StepDataStore {
                 db.execSQL("DROP INDEX IX_steps_timestamp");
                 db.execSQL("CREATE UNIQUE INDEX IX_steps_timestamp ON steps (timestamp)");
             }
-            if (oldVersion <= 2) {
-                db.execSQL("ALTER TABLE steps ADD COLUMN day_of_week INTEGER");
+            if (oldVersion <= 8) {
+                db.execSQL("ALTER TABLE steps DROP COLUMN day_of_week");
             }
-            if (oldVersion <= 6) {
-                // Go through and populate the day_of_week field for all existing rows...
-                Cursor cursor = null;
-                try {
-                    ArrayList<StepHeatmapEntry> heatmap = new ArrayList<StepHeatmapEntry>();
-                    cursor = db.query("steps", new String[] {"timestamp"},
-                            null, null, null, null, null);
-                    if (cursor.moveToFirst()) {
-                        do {
-                            long timestamp = cursor.getLong(0);
-                            int dayOfWeek = getDayOfWeek(timestamp);
-                            db.execSQL("UPDATE steps SET day_of_week=" + dayOfWeek
-                                    + " WHERE timestamp = " + timestamp);
-                        } while (cursor.moveToNext());
-                    }
-                } finally {
-                    if (cursor != null) {
-                        cursor.close();
-                    }
-                }
-            }
-        }
-
-        private int getDayOfWeek(long timestamp) {
-            Calendar cal = Calendar.getInstance();
-            cal.setTimeInMillis(timestamp);
-            return cal.get(Calendar.DAY_OF_WEEK) - 1;
         }
 
         /** Updates the step count. */
@@ -177,11 +155,10 @@ public class StepDataStore {
             synchronized (lock) {
                 SQLiteDatabase db = getWritableDatabase();
                 try {
-                    int dayOfWeek = getDayOfWeek(timestamp);
-                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng, day_of_week) VALUES ("
+                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng) VALUES ("
                             + timestamp + ", "
                             + "COALESCE((SELECT steps FROM steps WHERE timestamp = " + timestamp + "), 0) + " + steps + ", "
-                            + lat + ", " + lng + ", " + dayOfWeek + ")");
+                            + lat + ", " + lng + ")");
                 } finally {
                     db.close();
                 }
@@ -193,11 +170,10 @@ public class StepDataStore {
             synchronized (lock) {
                 SQLiteDatabase db = getWritableDatabase();
                 try {
-                    int dayOfWeek = getDayOfWeek(timestamp);
-                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng, day_of_week) VALUES ("
+                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng) VALUES ("
                             + timestamp + ", "
                             + steps + ", "
-                            + lat + ", " + lng + ", " + dayOfWeek + ")");
+                            + lat + ", " + lng + ")");
                 } finally {
                     db.close();
                 }
@@ -274,19 +250,29 @@ public class StepDataStore {
             }
         }
 
-        public long[] getDayOfWeekHistogram() {
-            long[] histogram = new long[7];
+        public AverageStepCountPerUnitOfTime[] getUnitOfTimeHistogram(long millisecondsPerInterval, int numIntervals) {
+            long utcOffsetMillis = Calendar.getInstance().getTimeZone().getOffset(new Date().getTime());
+            AverageStepCountPerUnitOfTime[] histogram = new AverageStepCountPerUnitOfTime[numIntervals];
+            for (int i = 0; i < numIntervals; i++) {
+                histogram[i] = new AverageStepCountPerUnitOfTime();
+            }
             synchronized (lock) {
                 SQLiteDatabase db = getReadableDatabase();
                 Cursor cursor = null;
                 try {
-                    cursor = db.rawQuery("SELECT day_of_week, SUM(steps) FROM steps GROUP BY day_of_week", null);
+                    String intervalSelect = "CAST((timestamp + " + utcOffsetMillis + ") / " + millisecondsPerInterval + " AS INTEGER)";
+                    cursor = db.rawQuery("SELECT " + intervalSelect + ", SUM(steps) FROM steps GROUP BY " + intervalSelect, null);
                     if (!cursor.moveToFirst()) {
                         return histogram;
                     }
 
                     do {
-                        histogram[cursor.getInt(0)] = cursor.getLong(1);
+                        long timestamp = cursor.getLong(0) * millisecondsPerInterval;
+                        long steps = cursor.getLong(1);
+                        int bucket = (int)(cursor.getLong(0) % numIntervals);
+
+                        histogram[bucket].count ++;
+                        histogram[bucket].totalSteps += steps;
                     } while (cursor.moveToNext());
                 } finally {
                     if (cursor != null) cursor.close();
