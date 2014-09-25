@@ -9,7 +9,7 @@
     <string name="notification_title">Congratulations!</string>
     <string name="notification_content_short">You\'ve burnt one %1$s\'s worth of calories today!</string>
     <string name="notification_content_long">You\'ve burnt one %1$s\'s worth of calories by walking %2$d steps today!</string>
-    <string name="title_activity_graph">GraphActivity</string>
+    <string name="title_activity_graph">Graphs</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
 
