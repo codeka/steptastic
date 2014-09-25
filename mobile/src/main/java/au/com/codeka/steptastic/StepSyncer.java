@@ -8,6 +8,7 @@ import android.util.Log;
 import com.appspot.steptastic_wear.syncsteps.Syncsteps;
 import com.appspot.steptastic_wear.syncsteps.model.SyncStepCount;
 import com.appspot.steptastic_wear.syncsteps.model.SyncStepCountCollection;
+import com.appspot.steptastic_wear.syncsteps.model.SyncFirstStep;
 import com.google.api.client.extensions.android.http.AndroidHttp;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.json.gson.GsonFactory;
@@ -27,18 +28,20 @@ public class StepSyncer {
 
     private final Context context;
     private final Syncsteps service;
-    private final long lastSyncTimestamp;
+    private final boolean fullSync;
     private final DateFormat dateFormat = DateFormat.getDateInstance();
+    private long lastSyncTimestamp;
 
     private static boolean isSyncing = false;
     public static final String PREF_ACCOUNT_NAME = "AccountName";
 
-    public StepSyncer(Context context, Syncsteps service) {
+    public StepSyncer(Context context, Syncsteps service, boolean fullSync) {
         this.context = context;
         this.service = service;
+        this.fullSync = fullSync;
         SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
         long timestamp = settings.getLong("LastSyncTimestamp", 0);
-        if (timestamp == 0) {
+        if (!fullSync && timestamp == 0) {
             // if we haven't synced before, we'll find the oldest entry in the data store and
             // start from there.
             timestamp = StepDataStore.i.getOldestStep();
@@ -47,7 +50,7 @@ public class StepSyncer {
                 // the sync() method will check this.
             }
         }
-        lastSyncTimestamp = timestamp;
+        this.lastSyncTimestamp = timestamp;
     }
 
     /** Gets the time, in milliseconds, since the last sync. */
@@ -76,7 +79,7 @@ public class StepSyncer {
         Syncsteps.Builder builder = new Syncsteps.Builder(
                 AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
         builder.setApplicationName("Steptastic");
-        new StepSyncer(context, builder.build()).sync(new SyncStatusCallback() {
+        new StepSyncer(context, builder.build(), false).sync(new SyncStatusCallback() {
             @Override
             public void setSyncStatus(String status) {
             }
@@ -96,6 +99,9 @@ public class StepSyncer {
             @Override
             protected Boolean doInBackground(Void... params) {
                 try {
+                    if (fullSync) {
+                        getFirstSyncDate();
+                    }
                     syncUp(syncStatusCallback);
                     syncDown(syncStatusCallback);
                 } catch(IOException e) {
@@ -120,6 +126,27 @@ public class StepSyncer {
                 }
             }
         }.execute();
+    }
+
+    /**
+     * When we're doing a full sync, ask the server when the first step was taken and sync from
+     * then.
+     */
+    private void getFirstSyncDate() throws IOException {
+        SyncFirstStep firstStep = service.sync().firstStep().execute();
+        if (firstStep != null) {
+            long timestamp = firstStep.getDate();
+            Log.i(TAG, "Got timestamp: " + timestamp + ", current lastSyncTimestamp: "
+                    + lastSyncTimestamp);
+            if (timestamp == 0) {
+                return;
+            }
+            if (lastSyncTimestamp == 0 || timestamp < lastSyncTimestamp) {
+                lastSyncTimestamp = timestamp;
+            }
+        } else {
+            Log.w(TAG, "fullSync is true, but firstStep() returned null!");
+        }
     }
 
     /** Syncs from our local store to the server. */

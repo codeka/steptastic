@@ -126,6 +126,12 @@ public class DailyStepsActivity extends FragmentActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.main_menu, menu);
+
+        MenuItem syncToCloudMenuItem = menu.findItem(R.id.sync_to_cloud);
+        SharedPreferences settings = getSharedPreferences("Steptastic", 0);
+        syncToCloudMenuItem.setChecked(
+                settings.getString(StepSyncer.PREF_ACCOUNT_NAME, null) != null);
+
         return true;
     }
 
@@ -134,7 +140,13 @@ public class DailyStepsActivity extends FragmentActivity {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.sync_to_cloud:
-                startSyncing(true);
+                if (item.isChecked()) {
+                    item.setChecked(false);
+                    stopSyncing();
+                } else {
+                    item.setChecked(true);
+                    startSyncing(true);
+                }
                 return true;
             case R.id.graphs:
                 Intent intent = new Intent(this, GraphActivity.class);
@@ -154,13 +166,18 @@ public class DailyStepsActivity extends FragmentActivity {
         startSyncing(false);
     }
 
-    private void startSyncing(boolean chooseAccount) {
+    private void stopSyncing() {
+        SharedPreferences settings = getSharedPreferences("Steptastic", 0);
+        settings.edit().putString(StepSyncer.PREF_ACCOUNT_NAME, null).commit();
+    }
+
+    private void startSyncing(boolean fullSync) {
         SharedPreferences settings = getSharedPreferences("Steptastic", 0);
         GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(this,
                 "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
         String accountName = settings.getString(StepSyncer.PREF_ACCOUNT_NAME, null);
         if (accountName == null) {
-            if (chooseAccount) {
+            if (fullSync) {
                 startActivityForResult(credential.newChooseAccountIntent(),
                         REQUEST_ACCOUNT_PICKER);
             }
@@ -171,11 +188,11 @@ public class DailyStepsActivity extends FragmentActivity {
         Syncsteps.Builder builder = new Syncsteps.Builder(
                 AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
         builder.setApplicationName("Steptastic");
-        syncSteps(builder.build());
+        syncSteps(builder.build(), fullSync);
     }
 
-    private void syncSteps(Syncsteps service) {
-        new StepSyncer(this, service).sync(new StepSyncer.SyncStatusCallback() {
+    private void syncSteps(Syncsteps service, boolean fullSync) {
+        new StepSyncer(this, service, fullSync).sync(new StepSyncer.SyncStatusCallback() {
             @Override
             public void setSyncStatus(String status) {
                 updateSyncStatus(status);
@@ -204,7 +221,7 @@ public class DailyStepsActivity extends FragmentActivity {
                     settings.edit()
                             .putString(StepSyncer.PREF_ACCOUNT_NAME, accountName)
                             .commit();
-                    startSyncing(false);
+                    startSyncing(true);
                 }
             }
             break;
