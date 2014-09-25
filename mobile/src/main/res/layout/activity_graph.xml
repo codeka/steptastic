@@ -9,11 +9,15 @@
         android:background="#e3e3e3"
         android:orientation="vertical" >
 
-        <TextView
+        <FrameLayout
             style="@style/Card"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/hello_world"/>
+            android:layout_height="wrap_content">
+            <au.com.codeka.steptastic.graph.BarGraph
+                android:id="@+id/day_of_week_histogram"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+        </FrameLayout>
 
         <TextView
             style="@style/Card"

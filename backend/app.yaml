@@ -28,3 +28,4 @@ handlers:
 
 - url: /.*
   script: frontend.app
+

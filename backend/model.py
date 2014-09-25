@@ -51,4 +51,13 @@ class DailyStepCount(db.Model):
     dsc.blob = pickle.dumps(existing_steps)
     dsc.put()
 
-
+  @staticmethod
+  def get_first_step_date(email):
+    first_entry = DailyStepCount.all().filter('user', email).order('date').fetch(1)
+    if not first_entry:
+      return 0
+    timestamp = 0
+    for step_count in pickle.loads(first_entry[0].blob):
+      if timestamp == 0 or step_count.timestamp < timestamp:
+        timestamp = step_count.timestamp
+    return timestamp

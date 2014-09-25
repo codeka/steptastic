@@ -9,6 +9,8 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 
 import au.com.codeka.steptastic.eventbus.EventBus;
@@ -75,6 +77,11 @@ public class StepDataStore {
         return new Store().getOldestStep();
     }
 
+    /** Gets a histogram of the number of steps you do on each day-of-the-week. */
+    public long[] getDayOfWeekHistogram() {
+        return new Store().getDayOfWeekHistogram();
+    }
+
     /** Event that's posted to the {@link EventBus} whenever the step count updates. */
     public static class StepsUpdatedEvent {
         /** The total number of steps we've recorded today. */
@@ -109,7 +116,7 @@ public class StepDataStore {
         private static Object lock = new Object();
 
         public Store() {
-            super(App.i, "steps.db", null, 2);
+            super(App.i, "steps.db", null, 7);
         }
 
         /**
@@ -122,7 +129,8 @@ public class StepDataStore {
                     +"  timestamp INTEGER PRIMARY KEY,"
                     +"  steps INTEGER,"
                     +"  lat REAL,"
-                    +"  lng REAL);");
+                    +"  lng REAL,"
+                    +"  day_of_week INTEGER);");
             db.execSQL("CREATE UNIQUE INDEX IX_steps_timestamp ON steps (timestamp)");
         }
 
@@ -132,6 +140,36 @@ public class StepDataStore {
                 db.execSQL("DROP INDEX IX_steps_timestamp");
                 db.execSQL("CREATE UNIQUE INDEX IX_steps_timestamp ON steps (timestamp)");
             }
+            if (oldVersion <= 2) {
+                db.execSQL("ALTER TABLE steps ADD COLUMN day_of_week INTEGER");
+            }
+            if (oldVersion <= 6) {
+                // Go through and populate the day_of_week field for all existing rows...
+                Cursor cursor = null;
+                try {
+                    ArrayList<StepHeatmapEntry> heatmap = new ArrayList<StepHeatmapEntry>();
+                    cursor = db.query("steps", new String[] {"timestamp"},
+                            null, null, null, null, null);
+                    if (cursor.moveToFirst()) {
+                        do {
+                            long timestamp = cursor.getLong(0);
+                            int dayOfWeek = getDayOfWeek(timestamp);
+                            db.execSQL("UPDATE steps SET day_of_week=" + dayOfWeek
+                                    + " WHERE timestamp = " + timestamp);
+                        } while (cursor.moveToNext());
+                    }
+                } finally {
+                    if (cursor != null) {
+                        cursor.close();
+                    }
+                }
+            }
+        }
+
+        private int getDayOfWeek(long timestamp) {
+            Calendar cal = Calendar.getInstance();
+            cal.setTimeInMillis(timestamp);
+            return cal.get(Calendar.DAY_OF_WEEK) - 1;
         }
 
         /** Updates the step count. */
@@ -139,10 +177,11 @@ public class StepDataStore {
             synchronized (lock) {
                 SQLiteDatabase db = getWritableDatabase();
                 try {
-                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng) VALUES ("
+                    int dayOfWeek = getDayOfWeek(timestamp);
+                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng, day_of_week) VALUES ("
                             + timestamp + ", "
                             + "COALESCE((SELECT steps FROM steps WHERE timestamp = " + timestamp + "), 0) + " + steps + ", "
-                            + lat + ", " + lng + ")");
+                            + lat + ", " + lng + ", " + dayOfWeek + ")");
                 } finally {
                     db.close();
                 }
@@ -154,10 +193,11 @@ public class StepDataStore {
             synchronized (lock) {
                 SQLiteDatabase db = getWritableDatabase();
                 try {
-                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng) VALUES ("
+                    int dayOfWeek = getDayOfWeek(timestamp);
+                    db.execSQL("INSERT OR REPLACE INTO steps (timestamp, steps, lat, lng, day_of_week) VALUES ("
                             + timestamp + ", "
                             + steps + ", "
-                            + lat + ", " + lng + ")");
+                            + lat + ", " + lng + ", " + dayOfWeek + ")");
                 } finally {
                     db.close();
                 }
@@ -188,11 +228,17 @@ public class StepDataStore {
         public long getOldestStep() {
             synchronized (lock) {
                 SQLiteDatabase db = getReadableDatabase();
-                Cursor cursor = db.rawQuery("SELECT MIN(timestamp) FROM steps WHERE timestamp > 100", null);
-                if (!cursor.moveToFirst()) {
-                    return 0;
+                Cursor cursor = null;
+                try {
+                    cursor = db.rawQuery("SELECT MIN(timestamp) FROM steps WHERE timestamp > 100", null);
+                    if (!cursor.moveToFirst()) {
+                        return 0;
+                    }
+                    return cursor.getLong(0);
+                } finally {
+                    if (cursor != null) cursor.close();
+                    db.close();
                 }
-                return cursor.getLong(0);
             }
         }
 
@@ -226,6 +272,28 @@ public class StepDataStore {
                     db.close();
                 }
             }
+        }
+
+        public long[] getDayOfWeekHistogram() {
+            long[] histogram = new long[7];
+            synchronized (lock) {
+                SQLiteDatabase db = getReadableDatabase();
+                Cursor cursor = null;
+                try {
+                    cursor = db.rawQuery("SELECT day_of_week, SUM(steps) FROM steps GROUP BY day_of_week", null);
+                    if (!cursor.moveToFirst()) {
+                        return histogram;
+                    }
+
+                    do {
+                        histogram[cursor.getInt(0)] = cursor.getLong(1);
+                    } while (cursor.moveToNext());
+                } finally {
+                    if (cursor != null) cursor.close();
+                    db.close();
+                }
+            }
+            return histogram;
         }
     }
 }

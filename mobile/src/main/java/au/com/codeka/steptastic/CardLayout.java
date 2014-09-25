@@ -57,11 +57,9 @@ public class CardLayout extends LinearLayout {
 
                 child.getLocationOnScreen(location);
                 if (location[1] > heightPx) {
-                    Log.i("SCROLL", "Child #" + i + " is not visible.");
                     continue;
                 }
 
-                Log.i("SCROLL", "Doing child #" + i);
                 child.setTag(R.id.card_layout_tag, new Object());
                 if (i % 2 == 0) {
                     child.startAnimation(AnimationUtils.loadAnimation(getContext(),

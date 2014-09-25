@@ -10,7 +10,7 @@ public class TimestampUtils {
     /** Gets the timestamp for midnight on the day represented by the given timestamp. */
     public static long midnight(long ts) {
         Calendar m = Calendar.getInstance();
-        m.setTime(new Date(ts));
+        m.setTimeInMillis(ts);
         m.set(Calendar.HOUR_OF_DAY, 0);
         m.set(Calendar.MINUTE, 0);
         m.set(Calendar.SECOND, 0);

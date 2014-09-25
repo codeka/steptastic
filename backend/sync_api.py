@@ -25,6 +25,9 @@ class StepCountCollection(messages.Message):
   date = messages.IntegerField(1)
   steps = messages.MessageField(StepCount, 2, repeated=True)
 
+class FirstStep(messages.Message):
+  date = messages.IntegerField(1)
+
 @endpoints.api(name='syncsteps', version='v1',
                allowed_client_ids=[DEBUG_CLIENT_ID, RELEASE_CLIENT_ID,
                                    endpoints.API_EXPLORER_CLIENT_ID],
@@ -57,6 +60,14 @@ class SyncStepsApi(remote.Service):
       steps_collection.steps.append(StepCount(lat=step_count.lat, lng=step_count.lng, timestamp=step_count.timestamp,
                                               count=step_count.count))
     return steps_collection
+
+
+  @endpoints.method(message_types.VoidMessage, FirstStep, path='firststep', http_method='GET',
+                    name='sync.firstStep')
+  def first_step(self, request):
+    firststep = FirstStep()
+    firststep.date = model.DailyStepCount.get_first_step_date(self._getEmail())
+    return firststep
 
   def _getEmail(self):
     email = endpoints.get_current_user().email()
