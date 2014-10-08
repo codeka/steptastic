@@ -13,6 +13,7 @@
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:padding="10dp"
+        android:background="@drawable/status_bg"
         android:text="Last server sync: never" />
 
     <fragment

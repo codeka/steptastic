@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This is the background for the top "step count" on the main screen. It's got a subtle
+     gradient to black at the bottom. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="#00000000"
+        android:centerColor="#00000000"
+        android:endColor="#22000000"
+        android:centerY="0.8"
+        android:type="linear"
+        />
+</shape>
