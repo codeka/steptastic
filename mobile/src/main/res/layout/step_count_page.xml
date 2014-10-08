@@ -9,6 +9,14 @@
         android:padding="4dp"
         android:text="TODAY" />
 
+    <TextView android:id="@+id/calories"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_alignBottom="@+id/current_steps"
+        android:padding="4dp"
+        android:text="0 cal" />
+
     <TextView android:id="@+id/current_steps"
         android:layout_width="match_parent"
         android:layout_height="80dp"

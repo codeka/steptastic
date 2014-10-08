@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
 
@@ -26,20 +27,31 @@ public class NotificationGenerator {
 
     /** Sets the current step count to the given value for today. */
     public void setCurrentStepCount(long steps) {
-        SharedPreferences sharedPreferences = App.i.getSharedPreferences("Steptastic", 0);
-        long lastStepCount = sharedPreferences.getLong("NotificationGenerator.LastStepCount", 0);
-        if (steps <= lastStepCount) {
-            sharedPreferences.edit().putLong("NotificationGenerator.LastStepCount", steps).commit();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(App.i);
+        if (!preferences.getBoolean("au.com.codeka.steptastic.CountCalories", true)) {
+            return;
+        }
+
+        if (!preferences.getBoolean("au.com.codeka.steptastic.ShowNotifications", true)) {
+            return;
+        }
+
+        float calories = stepsToCalories(preferences, steps);
+        float lastCalorieCount = preferences.getFloat("NotificationGenerator.LastCalorieCount", 0);
+        if (calories <= lastCalorieCount) {
+            preferences.edit()
+                    .putFloat("NotificationGenerator.LastCalorieCount", calories).commit();
             return;
         }
 
         for (NotificationDetails notificationDetails : NOTIFICATIONS) {
-            if (lastStepCount < notificationDetails.steps && notificationDetails.steps <= steps) {
+            if (lastCalorieCount < notificationDetails.calories
+                    && notificationDetails.calories <= steps) {
                 showNotification(notificationDetails, steps);
             }
         }
 
-        sharedPreferences.edit().putLong("NotificationGenerator.LastStepCount", steps).commit();
+        preferences.edit().putFloat("NotificationGenerator.LastCalorieCount", calories).commit();
     }
 
     /** Shows the given notification when we've crossed the threshold of steps. */
@@ -81,22 +93,32 @@ public class NotificationGenerator {
         }
     }
 
-    /** Guestimate for how many steps it takes to burn the given number of calories. */
-    private static int caloriesToSteps(int calories) {
-        // We assume approximately 2,000 steps per 100 calories, which is about right for an 80kg
-        // person walking a regular pace.
-        return calories * 20;
+    /** Guestimate how many calories you've burnt, given you've walked a given number of steps. */
+    public static float stepsToCalories(SharedPreferences preferences, long steps) {
+        float heightInCm = Float.parseFloat(preferences.getString("au.com.codeka.steptastic.Height", "0"));
+        float weightInKg = Float.parseFloat(preferences.getString("au.com.codeka.steptastic.Weight", "0"));
+        if (heightInCm == 0) {
+            heightInCm = 171; // Average height of American person according to Google
+        }
+        if (weightInKg == 0) {
+            weightInKg = 83; // Average weight of American person according to Google
+        }
+
+        final float strideLengthInCm = heightInCm * 0.414f;
+        final float distanceInCm = strideLengthInCm * steps;
+        final float distanceInKm = distanceInCm / 100.0f / 1000.0f;
+
+        final float caloriesPerKm = 0.68f * weightInKg;
+        return caloriesPerKm * distanceInKm;
     }
 
     private static class NotificationDetails {
         public final int calories;
-        public final int steps;
         public final String message;
         public final String bitmapFileName;
 
         public NotificationDetails(int calories, String message, String bitmapFileName) {
             this.calories = calories;
-            this.steps = caloriesToSteps(calories);
             this.message = message;
             this.bitmapFileName = bitmapFileName;
         }

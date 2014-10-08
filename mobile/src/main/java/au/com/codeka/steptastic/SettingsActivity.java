@@ -123,14 +123,14 @@ public class SettingsActivity extends FragmentActivity {
             if (heightPreference.getValue() == null || heightPreference.getValue().length() == 0) {
                 heightPreference.setSummary("Specify your height.");
             } else {
-                int cm = Integer.parseInt(heightPreference.getValue());
+                float cm = Float.parseFloat(heightPreference.getValue());
                 if (isUsa()) {
                     int in = (int) (cm / 2.54f);
                     int feet = in / 12;
                     int remainder = in - (feet * 12);
                     heightPreference.setSummary(String.format("%d'%d\"", feet, remainder));
                 } else {
-                    heightPreference.setSummary(String.format("%d cm", cm));
+                    heightPreference.setSummary(String.format("%d cm", (int) cm));
                 }
             }
 
@@ -139,12 +139,12 @@ public class SettingsActivity extends FragmentActivity {
             if (weightPreference.getValue() == null || weightPreference.getValue().length() == 0) {
                 weightPreference.setSummary("Specify your weight.");
             } else {
-                int kg = Integer.parseInt(weightPreference.getValue());
+                float kg = Float.parseFloat(weightPreference.getValue());
                 if (isUsa()) {
-                    int lbs = (int) (kg / 2.205f);
+                    int lbs = (int) (kg * 2.205f);
                     weightPreference.setSummary(String.format("%d lb", lbs));
                 } else {
-                    weightPreference.setSummary(String.format("%d kg", kg));
+                    weightPreference.setSummary(String.format("%d kg", (int) kg));
                 }
             }
 
@@ -205,9 +205,9 @@ public class SettingsActivity extends FragmentActivity {
             for (int in = 48; in < 90; in += 2) {
                 int feet = in / 12;
                 int remainder = in - (feet * 12);
-                int cm = (int) (in * 2.54f);
+                float cm = in * 2.54f;
                 names.add(String.format("%d' %d\"", feet, remainder));
-                values.add(Integer.toString(cm));
+                values.add(Float.toString(cm));
             }
             heightPreference.setEntries(names.toArray(new String[names.size()]));
             heightPreference.setEntryValues(values.toArray(new String[values.size()]));
@@ -229,8 +229,8 @@ public class SettingsActivity extends FragmentActivity {
             ArrayList<String> values = new ArrayList<String>();
             for (int lb = 100; lb < 350; lb += 10) {
                 names.add(String.format("%d lb", lb));
-                int kg = (int) (lb * 0.4536);
-                values.add(Integer.toString(kg));
+                float kg = lb * 0.4536f;
+                values.add(Float.toString(kg));
             }
             weightPreference.setEntries(names.toArray(new String[names.size()]));
             weightPreference.setEntryValues(values.toArray(new String[values.size()]));

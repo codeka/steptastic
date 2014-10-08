@@ -126,12 +126,6 @@ public class DailyStepsActivity extends FragmentActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.main_menu, menu);
-/*
-        MenuItem syncToCloudMenuItem = menu.findItem(R.id.sync_to_cloud);
-        SharedPreferences settings = getSharedPreferences("Steptastic", 0);
-        syncToCloudMenuItem.setChecked(
-                settings.getString(StepSyncer.PREF_ACCOUNT_NAME, null) != null);
-*/
         return true;
     }
 
@@ -140,14 +134,6 @@ public class DailyStepsActivity extends FragmentActivity {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.settings:
-                /*
-                if (item.isChecked()) {
-                    item.setChecked(false);
-                    stopSyncing();
-                } else {
-                    item.setChecked(true);
-                    startSyncing(true);
-                }*/
                 startActivity(new Intent(this, SettingsActivity.class));
                 return true;
             case R.id.graphs:
@@ -386,6 +372,7 @@ public class DailyStepsActivity extends FragmentActivity {
 
     public static class StepCountFragment extends Fragment {
         private TextView stepCountTextView;
+        private TextView calorieCountTextView;
 
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -393,6 +380,7 @@ public class DailyStepsActivity extends FragmentActivity {
             ViewGroup rootView = (ViewGroup) inflater.inflate(R.layout.step_count_page, container,
                     false);
             stepCountTextView = (TextView) rootView.findViewById(R.id.current_steps);
+            calorieCountTextView = (TextView) rootView.findViewById(R.id.calories);
             TextView dayTextView = (TextView) rootView.findViewById(R.id.date);
 
             Bundle args = getArguments();
@@ -442,6 +430,20 @@ public class DailyStepsActivity extends FragmentActivity {
         public void updateCount(long stepCount) {
             if (stepCountTextView != null) {
                 stepCountTextView.setText(Long.toString(stepCount));
+
+                Activity activity = getActivity();
+                if (activity == null) {
+                    return;
+                }
+                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(
+                        activity);
+                if (preferences.getBoolean("au.com.codeka.steptastic.CountCalories", true)) {
+                    float calories = NotificationGenerator.stepsToCalories(preferences, stepCount);
+                    calorieCountTextView.setVisibility(View.VISIBLE);
+                    calorieCountTextView.setText(String.format("%.1f cal", calories));
+                } else {
+                    calorieCountTextView.setVisibility(View.GONE);
+                }
             }
         }
     }
