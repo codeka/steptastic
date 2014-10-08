@@ -5,8 +5,8 @@
         android:title="@string/graphs"
         android:showAsAction="ifRoom|withText"/>
 
-    <item android:id="@+id/sync_to_cloud"
-        android:icon="@drawable/ic_menu_account_list"
-        android:checkable="true"
-        android:title="@string/sync_to_cloud" />
+    <item android:id="@+id/settings"
+        android:icon="@drawable/ic_menu_manage"
+        android:title="Settings"
+        android:showAsAction="ifRoom|withText"/>
 </menu>

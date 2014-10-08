@@ -24,7 +24,7 @@ android {
         applicationId 'au.com.codeka.steptastic'
         minSdkVersion 19
         targetSdkVersion 20
-        versionCode 2
+        versionCode 3
         versionName '1.0'
     }
     buildTypes {

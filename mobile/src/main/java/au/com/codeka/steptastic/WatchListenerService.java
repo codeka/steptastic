@@ -4,10 +4,12 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.location.Location;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -76,7 +78,14 @@ public class WatchListenerService extends WearableListenerService {
 
     /** Check whether we should sync our data to the cloud, and if so, do it now. */
     private void maybeSyncToCloud() {
+        // Don't sync if we're not connected to wi-fi
         if (!isConnectedToWifi) {
+            return;
+        }
+
+        // Don't sync if we're not configured to sync
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        if (!preferences.getBoolean("au.com.codeka.steptastic.SyncToCloud", false)) {
             return;
         }
 
@@ -88,7 +97,7 @@ public class WatchListenerService extends WearableListenerService {
             return;
         }
 
-        StepSyncer.sync(this);
+        StepSyncer.sync(this, false);
         postMaybeSyncToCloudRunnable(AUTO_SYNC_INTERVAL_MS);
     }
 

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory
+        android:title="Calories">
+        <CheckBoxPreference
+            android:key="au.com.codeka.steptastic.CountCalories"
+            android:title="Count Calories"
+            android:summary="Note: the details you provide below never leaves your device and is only used to calculate an approximation of calories burnt."
+            android:defaultValue="true" />
+        <CheckBoxPreference
+            android:key="au.com.codeka.steptastic.ShowNotifications"
+            android:title="Notifications"
+            android:summary="Show notifications as you burn calories throughout the day."
+            android:dependency="au.com.codeka.steptastic.CountCalories"
+            android:defaultValue="true" />
+        <ListPreference
+            android:key="au.com.codeka.steptastic.Height"
+            android:title="Approx. Height"
+            android:dependency="au.com.codeka.steptastic.CountCalories" />
+        <ListPreference
+            android:key="au.com.codeka.steptastic.Weight"
+            android:title="Approx. Weight"
+            android:dependency="au.com.codeka.steptastic.CountCalories" />
+    </PreferenceCategory>
+    <PreferenceCategory
+        android:title="Cloud Backup">
+        <CheckBoxPreference
+            android:key="au.com.codeka.steptastic.SyncToCloud"
+            android:title="Sync to cloud"
+            android:summary="Not syncing." />
+    </PreferenceCategory>
+</PreferenceScreen>

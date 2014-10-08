@@ -9,6 +9,7 @@ import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
+import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
@@ -63,7 +64,6 @@ public class DailyStepsActivity extends FragmentActivity {
     private Handler handler;
     private CameraPosition cameraPosition;
 
-    private static final int REQUEST_ACCOUNT_PICKER = 132;
     private static final long DAYS = 1000 * 60 * 60 * 24;
     private static final long AUTO_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
@@ -126,12 +126,12 @@ public class DailyStepsActivity extends FragmentActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.main_menu, menu);
-
+/*
         MenuItem syncToCloudMenuItem = menu.findItem(R.id.sync_to_cloud);
         SharedPreferences settings = getSharedPreferences("Steptastic", 0);
         syncToCloudMenuItem.setChecked(
                 settings.getString(StepSyncer.PREF_ACCOUNT_NAME, null) != null);
-
+*/
         return true;
     }
 
@@ -139,48 +139,42 @@ public class DailyStepsActivity extends FragmentActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle item selection
         switch (item.getItemId()) {
-            case R.id.sync_to_cloud:
+            case R.id.settings:
+                /*
                 if (item.isChecked()) {
                     item.setChecked(false);
                     stopSyncing();
                 } else {
                     item.setChecked(true);
                     startSyncing(true);
-                }
+                }*/
+                startActivity(new Intent(this, SettingsActivity.class));
                 return true;
             case R.id.graphs:
-                Intent intent = new Intent(this, GraphActivity.class);
-                startActivity(intent);
+                startActivity(new Intent(this, GraphActivity.class));
             default:
                 return super.onOptionsItemSelected(item);
         }
     }
 
     private void maybeStartSyncing() {
-        // Don't sync more often than AUTO_SYNC_INTERVAL_MS
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+
+        // Don't sync if we're not configured to sync
+        if (!preferences.getBoolean("au.com.codeka.steptastic.SyncToCloud", false)) {
+            return;
+        }
+
+        // Also don't sync more often than AUTO_SYNC_INTERVAL_MS
         long timeSyncLastSync = StepSyncer.timeSinceLastSync(this);
         if (timeSyncLastSync < AUTO_SYNC_INTERVAL_MS) {
             return;
         }
 
-        startSyncing(false);
-    }
-
-    private void stopSyncing() {
-        SharedPreferences settings = getSharedPreferences("Steptastic", 0);
-        settings.edit().putString(StepSyncer.PREF_ACCOUNT_NAME, null).commit();
-    }
-
-    private void startSyncing(boolean fullSync) {
-        SharedPreferences settings = getSharedPreferences("Steptastic", 0);
         GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(this,
                 "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
-        String accountName = settings.getString(StepSyncer.PREF_ACCOUNT_NAME, null);
+        String accountName = preferences.getString(StepSyncer.PREF_ACCOUNT_NAME, null);
         if (accountName == null) {
-            if (fullSync) {
-                startActivityForResult(credential.newChooseAccountIntent(),
-                        REQUEST_ACCOUNT_PICKER);
-            }
             return;
         }
         credential.setSelectedAccountName(accountName);
@@ -188,11 +182,8 @@ public class DailyStepsActivity extends FragmentActivity {
         Syncsteps.Builder builder = new Syncsteps.Builder(
                 AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
         builder.setApplicationName("Steptastic");
-        syncSteps(builder.build(), fullSync);
-    }
 
-    private void syncSteps(Syncsteps service, boolean fullSync) {
-        new StepSyncer(this, service, fullSync).sync(new StepSyncer.SyncStatusCallback() {
+        new StepSyncer(this, builder.build(), false).sync(new StepSyncer.SyncStatusCallback() {
             @Override
             public void setSyncStatus(String status) {
                 updateSyncStatus(status);
@@ -204,28 +195,6 @@ public class DailyStepsActivity extends FragmentActivity {
                 updateHeatmapRunnable.run();
             }
         });
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        switch (requestCode) {
-        case REQUEST_ACCOUNT_PICKER:
-            // if you've just picked an account (for syncing) then we'll save it and start
-            // the sync again.
-            if (data != null && data.getExtras() != null) {
-                String accountName = data.getExtras().getString(AccountManager.KEY_ACCOUNT_NAME);
-                if (accountName != null) {
-                    SharedPreferences settings = getSharedPreferences("Steptastic", 0);
-                    settings.edit()
-                            .putString(StepSyncer.PREF_ACCOUNT_NAME, accountName)
-                            .commit();
-                    startSyncing(true);
-                }
-            }
-            break;
-        }
     }
 
     private void saveCameraPosition() {

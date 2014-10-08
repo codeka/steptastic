@@ -3,6 +3,7 @@ package au.com.codeka.steptastic;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
 import com.appspot.steptastic_wear.syncsteps.Syncsteps;
@@ -39,8 +40,8 @@ public class StepSyncer {
         this.context = context;
         this.service = service;
         this.fullSync = fullSync;
-        SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
-        long timestamp = settings.getLong("LastSyncTimestamp", 0);
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        long timestamp = preferences.getLong("LastSyncTimestamp", 0);
         if (!fullSync && timestamp == 0) {
             // if we haven't synced before, we'll find the oldest entry in the data store and
             // start from there.
@@ -59,19 +60,20 @@ public class StepSyncer {
             return 0;
         }
 
-        SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
-        long timestamp = settings.getLong("LastSyncTimestamp", 0);
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        long timestamp = preferences.getLong("LastSyncTimestamp", 0);
         return System.currentTimeMillis() - timestamp;
     }
 
     /** Performs a sync, without notifying the caller. Used by the background service. */
-    public static void sync(Context context) {
-        SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
+    public static void sync(Context context, boolean fullSync) {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
         GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(context,
                 "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
-        String accountName = settings.getString(PREF_ACCOUNT_NAME, null);
+        String accountName = preferences.getString(PREF_ACCOUNT_NAME, null);
         if (accountName == null) {
             // If you haven't set up an account yet, then we can't sync anyway.
+            Log.w(TAG, "No account set, cannot sync!");
             return;
         }
         credential.setSelectedAccountName(accountName);
@@ -79,9 +81,10 @@ public class StepSyncer {
         Syncsteps.Builder builder = new Syncsteps.Builder(
                 AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
         builder.setApplicationName("Steptastic");
-        new StepSyncer(context, builder.build(), false).sync(new SyncStatusCallback() {
+        new StepSyncer(context, builder.build(), fullSync).sync(new SyncStatusCallback() {
             @Override
             public void setSyncStatus(String status) {
+                Log.i(TAG, status);
             }
         }, new Runnable() {
             @Override
@@ -118,8 +121,8 @@ public class StepSyncer {
                 isSyncing = false;
 
                 if (success) {
-                    SharedPreferences settings = context.getSharedPreferences("Steptastic", 0);
-                    settings.edit().putLong("LastSyncTimestamp", syncTime).commit();
+                    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+                    preferences.edit().putLong("LastSyncTimestamp", syncTime).commit();
 
                     syncStatusCallback.setSyncStatus(null);
                     completeRunnable.run();
@@ -133,6 +136,7 @@ public class StepSyncer {
      * then.
      */
     private void getFirstSyncDate() throws IOException {
+        Log.i(TAG, "Doing full sync, getting first sync date.");
         SyncFirstStep firstStep = service.sync().firstStep().execute();
         if (firstStep != null) {
             long timestamp = firstStep.getDate();
