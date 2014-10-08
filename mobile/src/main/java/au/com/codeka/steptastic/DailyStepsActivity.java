@@ -322,7 +322,14 @@ public class DailyStepsActivity extends FragmentActivity {
                 }
                 heatmapOverlay = map.addTileOverlay(new TileOverlayOptions().tileProvider(provider));
 
-                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
+                try {
+                    map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
+                } catch (IllegalStateException e) {
+                    // This can happen if the map hasn't finished laying out yet and is 0x0 big.
+                    // We'll just scheduled this runnable again in a second to give it time to
+                    // settle down. This is a bit of a kludge...
+                    handler.postDelayed(updateHeatmapRunnable, 1000);
+                }
             } else {
                 if (heatmapOverlay != null) {
                     heatmapOverlay.remove();
