@@ -46,7 +46,7 @@ public class NotificationGenerator {
 
         for (NotificationDetails notificationDetails : NOTIFICATIONS) {
             if (lastCalorieCount < notificationDetails.calories
-                    && notificationDetails.calories <= steps) {
+                    && notificationDetails.calories <= calories) {
                 showNotification(notificationDetails, steps);
             }
         }
