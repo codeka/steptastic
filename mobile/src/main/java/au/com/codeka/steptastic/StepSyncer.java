@@ -21,6 +21,8 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
+import au.com.codeka.steptastic.eventbus.EventBus;
+
 /**
  * This class is responsible for syncing step counts to the server.
  */
@@ -33,8 +35,10 @@ public class StepSyncer {
     private final DateFormat dateFormat = DateFormat.getDateInstance();
     private long lastSyncTimestamp;
 
-    private static boolean isSyncing = false;
     public static final String PREF_ACCOUNT_NAME = "AccountName";
+
+    private static boolean isSyncing = false;
+    public static EventBus eventBus = new EventBus();
 
     public StepSyncer(Context context, Syncsteps service, boolean fullSync) {
         this.context = context;
@@ -81,23 +85,16 @@ public class StepSyncer {
         Syncsteps.Builder builder = new Syncsteps.Builder(
                 AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
         builder.setApplicationName("Steptastic");
-        new StepSyncer(context, builder.build(), fullSync).sync(new SyncStatusCallback() {
-            @Override
-            public void setSyncStatus(String status) {
-                if (status != null && status.length() > 0) {
-                    Log.i(TAG, status);
-                }
-            }
-        }, new Runnable() {
-            @Override
-            public void run() {
-            }
-        });
+        new StepSyncer(context, builder.build(), fullSync).sync();
     }
 
     /** Performs the actual sync, runs in a background thread. */
-    public void sync(final SyncStatusCallback syncStatusCallback, final Runnable completeRunnable) {
+    public void sync() {
         final long syncTime = System.currentTimeMillis();
+        if (isSyncing) {
+            // don't sync if we're already syncing.
+            return;
+        }
         isSyncing = true;
 
         new AsyncTask<Void, Long, Boolean>() {
@@ -120,8 +117,8 @@ public class StepSyncer {
                     long endTimestamp = TimestampUtils.tomorrowMidnight();
                     for (long dt = startTimestamp; dt < endTimestamp;
                          dt = TimestampUtils.nextDay(dt)) {
-                        syncUp(syncStatusCallback, dt);
-                        syncDown(syncStatusCallback, dt);
+                        syncUp(dt);
+                        syncDown(dt);
 
                         publishProgress(dt);
                     }
@@ -150,8 +147,7 @@ public class StepSyncer {
                     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
                     preferences.edit().putLong("LastSyncTimestamp", syncTime).commit();
 
-                    syncStatusCallback.setSyncStatus(null);
-                    completeRunnable.run();
+                    eventBus.publish(new SyncCompleteEvent());
                 }
             }
         }.execute();
@@ -181,9 +177,9 @@ public class StepSyncer {
     }
 
     /** Syncs from our local store to the server. */
-    private void syncUp(SyncStatusCallback syncStatusCallback, long dt) throws IOException {
-        syncStatusCallback.setSyncStatus("Uploading steps from "
-                + dateFormat.format(new Date(dt)) + "...");
+    private void syncUp(long dt) throws IOException {
+        eventBus.publish(new SyncStatusEvent("Uploading steps from "
+                + dateFormat.format(new Date(dt)) + "..."));
         List<StepDataStore.StepHeatmapEntry> heatmap =
                 StepDataStore.i.getHeatmap(dt, TimestampUtils.nextDay(dt));
 
@@ -203,9 +199,9 @@ public class StepSyncer {
     }
 
     /** Syncs from the server down to our local data store. */
-    private void syncDown(SyncStatusCallback syncStatusCallback, long dt) throws IOException {
-        syncStatusCallback.setSyncStatus("Downloading steps from "
-                + dateFormat.format(new Date(dt)) + "...");
+    private void syncDown(long dt) throws IOException {
+        eventBus.publish(new SyncStatusEvent("Downloading steps from "
+                + dateFormat.format(new Date(dt)) + "..."));
 
         SyncStepCountCollection coll = service.sync().getSteps(dt).execute();
         if (coll == null || coll.getSteps() == null) {
@@ -218,7 +214,16 @@ public class StepSyncer {
         }
     }
 
-    public interface SyncStatusCallback {
-        void setSyncStatus(String status);
+    /* Event that's posted to our event bus as we sync. */
+    public static class SyncStatusEvent {
+        public String status;
+
+        public SyncStatusEvent(String status) {
+            this.status = status;
+        }
+    }
+
+    /** This event is posted to the event bus when a sync completes. */
+    public static class SyncCompleteEvent {
     }
 }

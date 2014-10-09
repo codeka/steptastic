@@ -1,6 +1,5 @@
 package au.com.codeka.steptastic;
 
-import android.accounts.AccountManager;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -24,7 +23,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import com.appspot.steptastic_wear.syncsteps.Syncsteps;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
@@ -36,9 +34,6 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
-import com.google.api.client.extensions.android.http.AndroidHttp;
-import com.google.api.client.json.gson.GsonFactory;
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.google.maps.android.heatmaps.WeightedLatLng;
 
@@ -105,6 +100,7 @@ public class DailyStepsActivity extends FragmentActivity {
         super.onStart();
         watchConnection.start();
         StepDataStore.eventBus.register(eventHandler);
+        StepSyncer.eventBus.register(eventHandler);
 
         loadCameraPosition();
         if (map != null && cameraPosition != null) {
@@ -117,6 +113,7 @@ public class DailyStepsActivity extends FragmentActivity {
     protected void onStop() {
         super.onStop();
         StepDataStore.eventBus.unregister(eventHandler);
+        StepSyncer.eventBus.unregister(eventHandler);
         watchConnection.stop();
 
         saveCameraPosition();
@@ -157,30 +154,7 @@ public class DailyStepsActivity extends FragmentActivity {
             return;
         }
 
-        GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(this,
-                "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
-        String accountName = preferences.getString(StepSyncer.PREF_ACCOUNT_NAME, null);
-        if (accountName == null) {
-            return;
-        }
-        credential.setSelectedAccountName(accountName);
-
-        Syncsteps.Builder builder = new Syncsteps.Builder(
-                AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential);
-        builder.setApplicationName("Steptastic");
-
-        new StepSyncer(this, builder.build(), false).sync(new StepSyncer.SyncStatusCallback() {
-            @Override
-            public void setSyncStatus(String status) {
-                updateSyncStatus(status);
-            }
-        }, new Runnable() {
-            @Override
-            public void run() {
-                refreshStepCount(StepDataStore.i.getStepsToday());
-                updateHeatmapRunnable.run();
-            }
-        });
+        StepSyncer.sync(this, false);
     }
 
     private void saveCameraPosition() {
@@ -229,6 +203,18 @@ public class DailyStepsActivity extends FragmentActivity {
             refreshStepCount(event.stepsToday);
             showLocation(event.currentLocation);
         }
+
+        @EventHandler(thread = EventHandler.UI_THREAD)
+        public void onSyncStatus(StepSyncer.SyncStatusEvent event) {
+            updateSyncStatus(event.status);
+        }
+
+        @EventHandler(thread = EventHandler.UI_THREAD)
+        public void onSyncComplete(StepSyncer.SyncCompleteEvent event) {
+            refreshStepCount(StepDataStore.i.getStepsToday());
+            updateHeatmapRunnable.run();
+            updateSyncStatus(null);
+        }
     };
 
     private void refreshStepCount(long steps) {
@@ -249,26 +235,22 @@ public class DailyStepsActivity extends FragmentActivity {
         }
     }
 
-    private void updateSyncStatus(final String status) {
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                String statusMsg = status;
-                if (statusMsg == null) {
-                    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(
-                            DailyStepsActivity.this);
-                    long timestamp = preferences.getLong("LastSyncTimestamp", 0);
-                    if (timestamp == 0) {
-                        statusMsg = "Last server sync: never";
-                    } else {
-                        DateFormat dateFormat = DateFormat.getDateTimeInstance();
-                        statusMsg = "Last server sync: " + dateFormat.format(new Date(timestamp));
-                    }
-                }
-
-                syncStatus.setText(statusMsg);
+    /** Update the sync status, we assume this is called on a UI thread. */
+    private void updateSyncStatus(String status) {
+        String statusMsg = status;
+        if (statusMsg == null) {
+            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(
+                    DailyStepsActivity.this);
+            long timestamp = preferences.getLong("LastSyncTimestamp", 0);
+            if (timestamp == 0) {
+                statusMsg = "Last server sync: never";
+            } else {
+                DateFormat dateFormat = DateFormat.getDateTimeInstance();
+                statusMsg = "Last server sync: " + dateFormat.format(new Date(timestamp));
             }
-        });
+        }
+
+        syncStatus.setText(statusMsg);
     }
 
     private Runnable updateHeatmapRunnable = new Runnable() {

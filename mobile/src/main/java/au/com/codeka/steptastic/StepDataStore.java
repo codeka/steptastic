@@ -14,9 +14,7 @@ import java.util.TimeZone;
 
 import au.com.codeka.steptastic.eventbus.EventBus;
 
-/**
- * A data store for storing step data.
- */
+/** A data store for storing step data. */
 public class StepDataStore {
     public static StepDataStore i = new StepDataStore();
 
