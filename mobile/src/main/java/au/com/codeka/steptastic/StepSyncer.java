@@ -84,7 +84,9 @@ public class StepSyncer {
         new StepSyncer(context, builder.build(), fullSync).sync(new SyncStatusCallback() {
             @Override
             public void setSyncStatus(String status) {
-                Log.i(TAG, status);
+                if (status != null && status.length() > 0) {
+                    Log.i(TAG, status);
+                }
             }
         }, new Runnable() {
             @Override
@@ -98,15 +100,31 @@ public class StepSyncer {
         final long syncTime = System.currentTimeMillis();
         isSyncing = true;
 
-        new AsyncTask<Void, Void, Boolean>() {
+        new AsyncTask<Void, Long, Boolean>() {
             @Override
             protected Boolean doInBackground(Void... params) {
                 try {
+                    long lastSync = lastSyncTimestamp;
                     if (fullSync) {
-                        getFirstSyncDate();
+                        lastSync = getFirstSyncDate();
                     }
-                    syncUp(syncStatusCallback);
-                    syncDown(syncStatusCallback);
+
+                    long startTimestamp = lastSync;
+                    if (startTimestamp == 0) {
+                        // If we haven't sync'd at all yet, just arbitrarily choose the last week to sync.
+                        Calendar c = Calendar.getInstance();
+                        c.add(Calendar.DAY_OF_YEAR, -5);
+                        startTimestamp = c.getTimeInMillis();
+                    }
+                    startTimestamp = TimestampUtils.midnight(startTimestamp);
+                    long endTimestamp = TimestampUtils.tomorrowMidnight();
+                    for (long dt = startTimestamp; dt < endTimestamp;
+                         dt = TimestampUtils.nextDay(dt)) {
+                        syncUp(syncStatusCallback, dt);
+                        syncDown(syncStatusCallback, dt);
+
+                        publishProgress(dt);
+                    }
                 } catch(IOException e) {
                     // ignore errors, but don't update the lastSyncTimestamp
                     Log.e(TAG, "Exception occurred uploading steps.", e);
@@ -114,6 +132,14 @@ public class StepSyncer {
                 }
 
                 return true;
+            }
+
+            @Override
+            protected void onProgressUpdate(Long... progress) {
+                // Each day we sync, save that so that we don't have to do it again if we're killed.
+                long dt = progress[0];
+                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+                preferences.edit().putLong("LastSyncTimestamp", dt).commit();
             }
 
             @Override
@@ -135,84 +161,60 @@ public class StepSyncer {
      * When we're doing a full sync, ask the server when the first step was taken and sync from
      * then.
      */
-    private void getFirstSyncDate() throws IOException {
+    private long getFirstSyncDate() throws IOException {
         Log.i(TAG, "Doing full sync, getting first sync date.");
+        long syncTime = lastSyncTimestamp;
         SyncFirstStep firstStep = service.sync().firstStep().execute();
         if (firstStep != null) {
             long timestamp = firstStep.getDate();
             Log.i(TAG, "Got timestamp: " + timestamp + ", current lastSyncTimestamp: "
                     + lastSyncTimestamp);
             if (timestamp == 0) {
-                return;
-            }
-            if (lastSyncTimestamp == 0 || timestamp < lastSyncTimestamp) {
-                lastSyncTimestamp = timestamp;
+                syncTime = lastSyncTimestamp;
+            } else if (lastSyncTimestamp == 0 || timestamp < lastSyncTimestamp) {
+                syncTime = timestamp;
             }
         } else {
             Log.w(TAG, "fullSync is true, but firstStep() returned null!");
         }
+        return syncTime;
     }
 
     /** Syncs from our local store to the server. */
-    private void syncUp(SyncStatusCallback syncStatusCallback) throws IOException {
-        if (lastSyncTimestamp == 0) {
-            // if we don't have any last sync timestamp, it means we don't have any steps at all,
-            // so there's nothing to do
-            Log.i(TAG, "Nothing to sync, lastSyncTimestamp == 0");
-            return;
+    private void syncUp(SyncStatusCallback syncStatusCallback, long dt) throws IOException {
+        syncStatusCallback.setSyncStatus("Uploading steps from "
+                + dateFormat.format(new Date(dt)) + "...");
+        List<StepDataStore.StepHeatmapEntry> heatmap =
+                StepDataStore.i.getHeatmap(dt, TimestampUtils.nextDay(dt));
+
+        SyncStepCountCollection coll = new SyncStepCountCollection();
+        coll.setDate(dt);
+        ArrayList<SyncStepCount> stepCounts = new ArrayList<SyncStepCount>();
+        for (StepDataStore.StepHeatmapEntry heatmapEntry : heatmap) {
+            SyncStepCount ssc = new SyncStepCount();
+            ssc.setCount((long) heatmapEntry.steps);
+            ssc.setLat(heatmapEntry.lat);
+            ssc.setLng(heatmapEntry.lng);
+            ssc.setTimestamp(heatmapEntry.timestamp);
+            stepCounts.add(ssc);
         }
-
-        // Starting from midnight on the day of our last sync, go day-by-day until today.
-        long startTimestamp = TimestampUtils.midnight(lastSyncTimestamp);
-        long endTimestamp = TimestampUtils.tomorrowMidnight();
-
-        for (long dt = startTimestamp; dt < endTimestamp; dt = TimestampUtils.nextDay(dt)) {
-            syncStatusCallback.setSyncStatus("Uploading steps from "
-                    + dateFormat.format(new Date(dt)) + "...");
-            List<StepDataStore.StepHeatmapEntry> heatmap =
-                    StepDataStore.i.getHeatmap(dt, TimestampUtils.nextDay(dt));
-
-            SyncStepCountCollection coll = new SyncStepCountCollection();
-            coll.setDate(dt);
-            ArrayList<SyncStepCount> stepCounts = new ArrayList<SyncStepCount>();
-            for (StepDataStore.StepHeatmapEntry heatmapEntry : heatmap) {
-                SyncStepCount ssc = new SyncStepCount();
-                ssc.setCount((long) heatmapEntry.steps);
-                ssc.setLat(heatmapEntry.lat);
-                ssc.setLng(heatmapEntry.lng);
-                ssc.setTimestamp(heatmapEntry.timestamp);
-                stepCounts.add(ssc);
-            }
-            coll.setSteps(stepCounts);
-            service.sync().putSteps(coll).execute();
-        }
+        coll.setSteps(stepCounts);
+        service.sync().putSteps(coll).execute();
     }
 
     /** Syncs from the server down to our local data store. */
-    private void syncDown(SyncStatusCallback syncStatusCallback) throws IOException {
-        long startTimestamp = lastSyncTimestamp;
-        if (startTimestamp == 0) {
-            // If we haven't sync'd at all yet, just arbitrarily choose the last week to sync.
-            Calendar c = Calendar.getInstance();
-            c.add(Calendar.DAY_OF_YEAR, -5);
-            startTimestamp = c.getTimeInMillis();
+    private void syncDown(SyncStatusCallback syncStatusCallback, long dt) throws IOException {
+        syncStatusCallback.setSyncStatus("Downloading steps from "
+                + dateFormat.format(new Date(dt)) + "...");
+
+        SyncStepCountCollection coll = service.sync().getSteps(dt).execute();
+        if (coll == null || coll.getSteps() == null) {
+            return;
         }
-        startTimestamp = TimestampUtils.midnight(startTimestamp);
-        long endTimestamp = TimestampUtils.tomorrowMidnight();
-
-        for (long dt = startTimestamp; dt < endTimestamp; dt = TimestampUtils.nextDay(dt)) {
-            syncStatusCallback.setSyncStatus("Downloading steps from "
-                    + dateFormat.format(new Date(dt)) + "...");
-
-            SyncStepCountCollection coll = service.sync().getSteps(dt).execute();
-            if (coll == null || coll.getSteps() == null) {
-                continue;
-            }
-            for (SyncStepCount stepCount : coll.getSteps()) {
-                StepDataStore.i.setStepCount(stepCount.getTimestamp(),
-                        (int) (long) stepCount.getCount(),
-                        stepCount.getLat(), stepCount.getLng());
-            }
+        for (SyncStepCount stepCount : coll.getSteps()) {
+            StepDataStore.i.setStepCount(stepCount.getTimestamp(),
+                    (int) (long) stepCount.getCount(),
+                    stepCount.getLat(), stepCount.getLng());
         }
     }
 

@@ -255,8 +255,9 @@ public class DailyStepsActivity extends FragmentActivity {
             public void run() {
                 String statusMsg = status;
                 if (statusMsg == null) {
-                    SharedPreferences settings = getSharedPreferences("Steptastic", 0);
-                    long timestamp = settings.getLong("LastSyncTimestamp", 0);
+                    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(
+                            DailyStepsActivity.this);
+                    long timestamp = preferences.getLong("LastSyncTimestamp", 0);
                     if (timestamp == 0) {
                         statusMsg = "Last server sync: never";
                     } else {
