@@ -13,9 +13,10 @@ import android.preference.PreferenceManager;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GooglePlayServicesClient;
+import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.data.FreezableUtils;
-import com.google.android.gms.location.LocationClient;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.DataMapItem;
@@ -29,8 +30,8 @@ import java.util.List;
 public class WatchListenerService extends WearableListenerService {
     private static final String TAG = "WatchListenerService";
 
-    private LocationListener locationListener;
-    private LocationClient locationClient;
+    private MyLocationListener locationListener;
+    private GoogleApiClient apiClient;
     private NotificationGenerator notificationGenerator;
     private boolean isConnectedToWifi;
     private Handler handler;
@@ -40,9 +41,15 @@ public class WatchListenerService extends WearableListenerService {
     @Override
     public void onCreate() {
         super.onCreate();
-        locationListener = new LocationListener();
-        locationClient = new LocationClient(this, locationListener, locationListener);
-        locationClient.connect();
+        locationListener = new MyLocationListener();
+
+        apiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(locationListener)
+                .addOnConnectionFailedListener(locationListener)
+                .build();
+        apiClient.connect();
+
         notificationGenerator = new NotificationGenerator();
         handler = new Handler();
 
@@ -69,7 +76,7 @@ public class WatchListenerService extends WearableListenerService {
                 Log.i(TAG, "ADDING: " + steps + ", timestamp = " + timestamp);
 
                 Location loc = locationListener.isConnected()
-                        ? locationClient.getLastLocation() : null;
+                        ? locationListener.getLastLocation() : null;
                 StepDataStore.i.addSteps(timestamp, steps, loc);
                 notificationGenerator.setCurrentStepCount(StepDataStore.i.getStepsToday());
             }
@@ -128,12 +135,17 @@ public class WatchListenerService extends WearableListenerService {
         }
     };
 
-    private class LocationListener implements GooglePlayServicesClient.ConnectionCallbacks,
-            GooglePlayServicesClient.OnConnectionFailedListener {
+    private class MyLocationListener implements GoogleApiClient.ConnectionCallbacks,
+            GoogleApiClient.OnConnectionFailedListener, LocationListener {
         private boolean isConnected;
+        private Location lastLocation;
 
         public boolean isConnected() {
             return isConnected;
+        }
+
+        public Location getLastLocation() {
+            return lastLocation;
         }
 
         @Override
@@ -142,7 +154,7 @@ public class WatchListenerService extends WearableListenerService {
         }
 
         @Override
-        public void onDisconnected() {
+        public void onConnectionSuspended(int i) {
             isConnected = false;
         }
 
@@ -150,6 +162,11 @@ public class WatchListenerService extends WearableListenerService {
         public void onConnectionFailed(ConnectionResult connectionResult) {
             isConnected = false;
             // TODO: handler errors?
+        }
+
+        @Override
+        public void onLocationChanged(Location location) {
+            lastLocation = location;
         }
     }
 

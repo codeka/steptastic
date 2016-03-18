@@ -27,7 +27,6 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
-import com.google.android.gms.maps.model.CameraPositionCreator;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -188,7 +187,7 @@ public class DailyStepsActivity extends FragmentActivity {
                 parcel.unmarshall(buffer, 0, numBytes);
             }
             parcel.setDataPosition(0);
-            cameraPosition = new CameraPositionCreator().createFromParcel(parcel);
+            //cameraPosition = CameraPosition.CREATOR.createFromParcel(parcel);
         } catch (Exception e) {
         } finally {
             if (fis != null) {
