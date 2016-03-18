@@ -1,21 +1,25 @@
 package au.com.codeka.steptastic;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.data.FreezableUtils;
 import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
@@ -64,16 +68,19 @@ public class WatchListenerService extends WearableListenerService {
   }
 
   @Override
+  public void onDestroy() {
+    super.onDestroy();
+    apiClient.disconnect();
+  }
+
+  @Override
   public void onDataChanged(DataEventBuffer dataEvents) {
-    Log.i(TAG, "onDataChanged()");
     final List<DataEvent> events = FreezableUtils.freezeIterable(dataEvents);
     for (DataEvent event : events) {
-      Log.i(TAG, "GOT DATA ITEM: " + event.getDataItem().getUri().getPath());
       DataMapItem dataItem = DataMapItem.fromDataItem(event.getDataItem());
       if (dataItem.getUri().getPath().equals("/steptastic/steps")) {
         int steps = dataItem.getDataMap().getInt("steps");
         long timestamp = dataItem.getDataMap().getLong("timestamp");
-        Log.i(TAG, "ADDING: " + steps + ", timestamp = " + timestamp);
 
         Location loc = locationListener.isConnected()
             ? locationListener.getLastLocation() : null;
@@ -152,16 +159,33 @@ public class WatchListenerService extends WearableListenerService {
 
     @Override
     public void onConnected(Bundle bundle) {
+      Log.d(TAG, "Location.onConnected");
+      boolean hasFineLocation = ActivityCompat.checkSelfPermission(WatchListenerService.this,
+          Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+      boolean hasCoarseLocation = ActivityCompat.checkSelfPermission(WatchListenerService.this,
+          Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+      if (!hasFineLocation && !hasCoarseLocation) {
+        // no permission!
+        return;
+      }
+      LocationServices.FusedLocationApi.requestLocationUpdates(apiClient,
+          new LocationRequest()
+              .setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY)
+              .setFastestInterval(60 * 1000) // at most once a minute
+              .setInterval(10 * 60 * 1000), // at least once every 10 minutes
+          this);
       isConnected = true;
     }
 
     @Override
     public void onConnectionSuspended(int i) {
+      Log.d(TAG, "Location.onConnectionSuspended");
       isConnected = false;
     }
 
     @Override
     public void onConnectionFailed(ConnectionResult connectionResult) {
+      Log.d(TAG, "Location.onConnectionFailed");
       isConnected = false;
       // TODO: handler errors?
     }

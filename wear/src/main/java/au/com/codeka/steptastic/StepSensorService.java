@@ -9,6 +9,7 @@ import android.hardware.SensorManager;
 import android.os.IBinder;
 
 import java.util.concurrent.TimeUnit;
+import java.util.Date;
 
 /**
  * This is a service which listens to the TYPE_STEP_COUNTER sensor to gather step count information.
@@ -66,7 +67,7 @@ public class StepSensorService extends Service {
         return;
       }
 
-      stepCountSyncer.syncStepCount(stepsThisEvent, timestamp / 1000000);
+      stepCountSyncer.syncStepCount(stepsThisEvent, new Date().getTime());
       StepsActivity.setSteps(count, timestamp);
     }
 

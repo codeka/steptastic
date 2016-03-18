@@ -2,6 +2,7 @@ package au.com.codeka.steptastic;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -24,6 +25,7 @@ public class WatchConnection {
   private ArrayList<String> watchNodes = new ArrayList<String>();
 
   public void setup(Context context) {
+    Log.d(TAG, "Setting up watch connection.");
     googleApiClient = new GoogleApiClient.Builder(context)
         .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
           @Override
@@ -32,14 +34,17 @@ public class WatchConnection {
             Wearable.NodeApi.getConnectedNodes(googleApiClient).setResultCallback(
                 new ResultCallback<NodeApi.GetConnectedNodesResult>() {
                   @Override
-                  public void onResult(NodeApi.GetConnectedNodesResult getConnectedNodesResult) {
-                    for (Node node : getConnectedNodesResult.getNodes()) {
+                  public void onResult(@NonNull NodeApi.GetConnectedNodesResult result) {
+                    Log.d(TAG, "Got connected nodes (" + result.getNodes().size() + " nodes)");
+                    for (Node node : result.getNodes()) {
                       watchNodes.add(node.getId());
                     }
                     isConnected = true;
                     for (Message msg : pendingMessages) {
+                      Log.d(TAG, "Sending pending message: " + msg.getPath());
                       sendMessage(msg);
                     }
+
                     pendingMessages.clear();
                   }
                 });
@@ -74,6 +79,7 @@ public class WatchConnection {
     if (!isConnected) {
       pendingMessages.add(msg);
     } else {
+      Log.d(TAG, "Sending message: " + msg.getPath());
       for (String watchNode : watchNodes) {
         Wearable.MessageApi.sendMessage(googleApiClient, watchNode, msg.getPath(),
             msg.getPayload());

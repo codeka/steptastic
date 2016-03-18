@@ -2,6 +2,8 @@ package au.com.codeka.steptastic;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -13,6 +15,8 @@ import com.google.android.gms.wearable.Wearable;
  * This class syncs the step counter with the phone.
  */
 public class StepCountSyncer {
+  private static final String TAG = StepCountSyncer.class.getSimpleName();
+
   private GoogleApiClient googleApiClient;
 
   public StepCountSyncer(Context context) {
@@ -20,15 +24,18 @@ public class StepCountSyncer {
         .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
           @Override
           public void onConnected(Bundle connectionHint) {
+            Log.d(TAG, "onConnected");
           }
 
           @Override
           public void onConnectionSuspended(int cause) {
+            Log.d(TAG, "onConnectionSuspended");
           }
         })
         .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener() {
           @Override
-          public void onConnectionFailed(ConnectionResult result) {
+          public void onConnectionFailed(@NonNull ConnectionResult result) {
+            Log.d(TAG, "onConnectionFailed: " + result);
           }
         })
         .addApi(Wearable.API)
@@ -44,6 +51,7 @@ public class StepCountSyncer {
     dataMap.getDataMap().putInt("steps", steps);
     dataMap.getDataMap().putLong("timestamp", timestamp);
     PutDataRequest request = dataMap.asPutDataRequest();
+    Log.d(TAG, "Putting value: " + steps + " steps, time: " + timestamp);
     Wearable.DataApi.putDataItem(googleApiClient, request);
   }
 }

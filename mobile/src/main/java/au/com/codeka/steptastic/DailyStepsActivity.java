@@ -165,7 +165,12 @@ public class DailyStepsActivity extends FragmentActivity {
     try {
       fos = openFileOutput("CameraPosition.dat", Context.MODE_PRIVATE);
       Parcel parcel = Parcel.obtain();
-      map.getCameraPosition().writeToParcel(parcel, 0);
+      CameraPosition campos = map.getCameraPosition();
+      parcel.writeDouble(campos.target.latitude);
+      parcel.writeDouble(campos.target.longitude);
+      parcel.writeDouble(campos.bearing);
+      parcel.writeDouble(campos.tilt);
+      parcel.writeDouble(campos.zoom);
       byte[] bytes = parcel.marshall();
       fos.write(bytes, 0, bytes.length);
     } catch (IOException e) {
@@ -190,7 +195,12 @@ public class DailyStepsActivity extends FragmentActivity {
         parcel.unmarshall(buffer, 0, numBytes);
       }
       parcel.setDataPosition(0);
-      //cameraPosition = CameraPosition.CREATOR.createFromParcel(parcel);
+      cameraPosition = CameraPosition.builder()
+          .target(new LatLng(parcel.readDouble(), parcel.readDouble()))
+          .bearing((float) parcel.readDouble())
+          .tilt((float) parcel.readDouble())
+          .zoom((float) parcel.readDouble())
+          .build();
     } catch (Exception e) {
     } finally {
       if (fis != null) {
