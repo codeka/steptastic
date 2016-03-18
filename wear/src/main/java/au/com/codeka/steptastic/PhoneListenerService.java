@@ -7,10 +7,10 @@ import com.google.android.gms.wearable.WearableListenerService;
  * This is the {@link WearableListenerService} that listens for messages from the phone app.
  */
 public class PhoneListenerService extends WearableListenerService {
-    @Override
-    public void onMessageReceived(MessageEvent msgEvent) {
-        if (msgEvent.getPath().equals("/steptastic/StartCounting")) {
-            AlarmReceiver.schedule(this);
-        }
+  @Override
+  public void onMessageReceived(MessageEvent msgEvent) {
+    if (msgEvent.getPath().equals("/steptastic/StartCounting")) {
+      AlarmReceiver.schedule(this);
     }
+  }
 }
