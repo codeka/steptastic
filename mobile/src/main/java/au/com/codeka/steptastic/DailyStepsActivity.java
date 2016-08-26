@@ -26,6 +26,7 @@ import android.widget.TextView;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
+import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
@@ -33,6 +34,7 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
+import com.google.common.base.Preconditions;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.google.maps.android.heatmaps.WeightedLatLng;
 
@@ -173,6 +175,7 @@ public class DailyStepsActivity extends FragmentActivity {
       parcel.writeDouble(campos.zoom);
       byte[] bytes = parcel.marshall();
       fos.write(bytes, 0, bytes.length);
+      parcel.recycle();
     } catch (IOException e) {
     } finally {
       if (fos != null) {
@@ -201,6 +204,7 @@ public class DailyStepsActivity extends FragmentActivity {
           .tilt((float) parcel.readDouble())
           .zoom((float) parcel.readDouble())
           .build();
+      parcel.recycle();
     } catch (Exception e) {
     } finally {
       if (fis != null) {
@@ -328,11 +332,16 @@ public class DailyStepsActivity extends FragmentActivity {
   private void setUpMapIfNeeded() {
     // Do a null check to confirm that we have not already instantiated the map.
     if (map == null) {
-      // Try to obtain the map from the SupportMapFragment.
-      map = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
-      if (cameraPosition != null) {
-        map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
-      }
+      MapFragment mapFragment = ((MapFragment) getFragmentManager().findFragmentById(R.id.map));
+      mapFragment.getMapAsync(new OnMapReadyCallback() {
+        @Override
+        public void onMapReady(GoogleMap newMap) {
+          map = Preconditions.checkNotNull(newMap);
+          if (cameraPosition != null) {
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+          }
+        }
+      });
     }
   }
 

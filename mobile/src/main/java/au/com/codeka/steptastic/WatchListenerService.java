@@ -75,12 +75,15 @@ public class WatchListenerService extends WearableListenerService {
 
   @Override
   public void onDataChanged(DataEventBuffer dataEvents) {
+    Log.d(TAG, "onDataChanged");
     final List<DataEvent> events = FreezableUtils.freezeIterable(dataEvents);
     for (DataEvent event : events) {
       DataMapItem dataItem = DataMapItem.fromDataItem(event.getDataItem());
+      Log.d(TAG, "onDataChanged(" + dataItem.getUri() + ")");
       if (dataItem.getUri().getPath().equals("/steptastic/steps")) {
         int steps = dataItem.getDataMap().getInt("steps");
         long timestamp = dataItem.getDataMap().getLong("timestamp");
+        Log.d(TAG, "Got value: " + steps + " timestamp " + timestamp);
 
         Location loc = locationListener.isConnected()
             ? locationListener.getLastLocation() : null;

@@ -52,7 +52,7 @@ public class StepsActivity extends Activity {
         stepsTextView.setText(String.format("Steps: %d", steps));
 
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        timestampTextView.setText(format.format(new Date(timestamp / 1000000)));
+        timestampTextView.setText(format.format(new Date(timestamp)));
       }
 
       handler.postDelayed(updateRunnable, 1000);

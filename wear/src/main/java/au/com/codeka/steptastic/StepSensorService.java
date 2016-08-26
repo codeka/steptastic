@@ -54,7 +54,7 @@ public class StepSensorService extends Service {
     @Override
     public void onSensorChanged(SensorEvent event) {
       int count = (int) event.values[0];
-      long timestamp = event.timestamp;
+      long timestamp = new Date().getTime();
 
       int stepsThisEvent = 0;
       if (lastStepCount > 0) {
@@ -67,7 +67,7 @@ public class StepSensorService extends Service {
         return;
       }
 
-      stepCountSyncer.syncStepCount(stepsThisEvent, new Date().getTime());
+      stepCountSyncer.syncStepCount(stepsThisEvent, timestamp);
       StepsActivity.setSteps(count, timestamp);
     }
 
