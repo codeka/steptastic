@@ -50,7 +50,6 @@ import java.util.Date;
 import au.com.codeka.steptastic.eventbus.EventHandler;
 
 public class DailyStepsActivity extends FragmentActivity {
-  private WatchConnection watchConnection = new WatchConnection();
   @Nullable private GoogleMap map;
   @Nullable private Marker marker;
   @Nullable private TileOverlay heatmapOverlay;
@@ -67,7 +66,6 @@ public class DailyStepsActivity extends FragmentActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_daily_steps);
-    watchConnection.setup(this);
     stepCountViewPager = (ViewPager) findViewById(R.id.current_steps_pager);
     stepCountPagerAdapter = new StepCountPagerAdapter(getSupportFragmentManager());
     stepCountViewPager.setAdapter(stepCountPagerAdapter);
@@ -76,6 +74,9 @@ public class DailyStepsActivity extends FragmentActivity {
     syncStatus = (TextView) findViewById(R.id.sync_status);
     setUpMapIfNeeded();
     handler = new Handler();
+
+    // Make sure the watch listener service is started.
+    startService(new Intent(this, WatchListenerService.class));
 
     stepCountViewPager.setOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
       @Override
@@ -89,7 +90,6 @@ public class DailyStepsActivity extends FragmentActivity {
   protected void onResume() {
     super.onResume();
     setUpMapIfNeeded();
-    watchConnection.sendMessage(new WatchConnection.Message("/steptastic/StartCounting", null));
     handler.postDelayed(updateHeatmapRunnable, 1000);
     updateSyncStatus(null);
     refreshStepCount(StepDataStore.i.getStepsToday());
@@ -99,7 +99,6 @@ public class DailyStepsActivity extends FragmentActivity {
   @Override
   protected void onStart() {
     super.onStart();
-    watchConnection.start();
     StepDataStore.eventBus.register(eventHandler);
     StepSyncer.eventBus.register(eventHandler);
 
@@ -115,7 +114,6 @@ public class DailyStepsActivity extends FragmentActivity {
     super.onStop();
     StepDataStore.eventBus.unregister(eventHandler);
     StepSyncer.eventBus.unregister(eventHandler);
-    watchConnection.stop();
 
     saveCameraPosition();
   }

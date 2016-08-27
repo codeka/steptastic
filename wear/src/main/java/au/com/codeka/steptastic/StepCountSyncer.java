@@ -1,15 +1,25 @@
 package au.com.codeka.steptastic;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.NodeApi;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 /**
  * This class syncs the step counter with the phone.
@@ -17,41 +27,95 @@ import com.google.android.gms.wearable.Wearable;
 public class StepCountSyncer {
   private static final String TAG = StepCountSyncer.class.getSimpleName();
 
-  private GoogleApiClient googleApiClient;
+  private final Context context;
+  private GoogleApiClient apiClient;
+  private ArrayList<Message> pendingMessages = new ArrayList<>();
+  private ArrayList<String> watchNodes = new ArrayList<>();
 
   public StepCountSyncer(Context context) {
-    googleApiClient = new GoogleApiClient.Builder(context)
-        .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
-          @Override
-          public void onConnected(Bundle connectionHint) {
-            Log.d(TAG, "onConnected");
-          }
+    this.context = context;
+  }
 
-          @Override
-          public void onConnectionSuspended(int cause) {
-            Log.d(TAG, "onConnectionSuspended");
-          }
-        })
-        .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener() {
-          @Override
-          public void onConnectionFailed(@NonNull ConnectionResult result) {
-            Log.d(TAG, "onConnectionFailed: " + result);
-          }
-        })
+  public void connect() {
+    if (apiClient != null) {
+      apiClient.disconnect();
+    }
+    apiClient = new GoogleApiClient.Builder(context)
         .addApi(Wearable.API)
+        .addConnectionCallbacks(connectionCallbacks)
         .build();
-    googleApiClient.connect();
+    apiClient.connect();
   }
 
   public void syncStepCount(int steps, long timestamp) {
     if (steps == 0) {
       return;
     }
-    PutDataMapRequest dataMap = PutDataMapRequest.create("/steptastic/steps");
-    dataMap.getDataMap().putInt("steps", steps);
-    dataMap.getDataMap().putLong("timestamp", timestamp);
-    PutDataRequest request = dataMap.asPutDataRequest();
-    Log.d(TAG, "Putting value: " + steps + " steps, time: " + timestamp);
-    Wearable.DataApi.putDataItem(googleApiClient, request);
+
+    ByteBuffer bb = ByteBuffer.allocate(12);
+    bb.putInt(steps);
+    bb.putLong(timestamp);
+    byte[] payload = bb.array();
+
+    sendMessage("/steptastic/steps", payload);
   }
+
+  private void sendMessage(String path, @Nullable byte[] payload) {
+    if (watchNodes.isEmpty()) {
+      Log.d(TAG, "Queuing message: " + path);
+      pendingMessages.add(new Message(path, payload));
+    } else {
+      Log.d(TAG, "Sending message: " + path);
+      for (String watchNode : watchNodes) {
+        Wearable.MessageApi.sendMessage(apiClient, watchNode, path, payload);
+      }
+    }
+  }
+
+  public static class Message {
+    private final String path;
+    private final byte[] payload;
+
+    public Message(String path, byte[] payload) {
+      this.path = path;
+      this.payload = payload;
+    }
+
+    public String getPath() {
+      return path;
+    }
+
+    public byte[] getPayload() {
+      return payload;
+    }
+  }
+
+  private final GoogleApiClient.ConnectionCallbacks connectionCallbacks
+      = new GoogleApiClient.ConnectionCallbacks() {
+    @Override
+    public void onConnected(Bundle bundle) {
+      Log.d(TAG, "onConnected()");
+      Wearable.NodeApi.getConnectedNodes(apiClient).setResultCallback(
+          new ResultCallback<NodeApi.GetConnectedNodesResult>() {
+            @Override
+            public void onResult(@NonNull NodeApi.GetConnectedNodesResult result) {
+              Log.d(TAG, "Got connected nodes (" + result.getNodes().size() + " nodes)");
+              for (Node node : result.getNodes()) {
+                watchNodes.add(node.getId());
+              }
+
+              for (Message pendingMessage : pendingMessages) {
+                sendMessage(pendingMessage.getPath(), pendingMessage.getPayload());
+              }
+              pendingMessages.clear();
+            }
+          });
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+      Log.d(TAG, "onConnectionSuspended()");
+      watchNodes.clear();
+    }
+  };
 }

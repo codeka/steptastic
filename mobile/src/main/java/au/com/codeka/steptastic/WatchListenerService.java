@@ -12,45 +12,48 @@ import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 
-import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.data.FreezableUtils;
+import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.wearable.DataEvent;
-import com.google.android.gms.wearable.DataEventBuffer;
-import com.google.android.gms.wearable.DataMapItem;
+import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.NodeApi;
+import com.google.android.gms.wearable.Wearable;
 import com.google.android.gms.wearable.WearableListenerService;
 
-import java.util.List;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
-/**
- * This service listens for events from the watch.
- */
+import javax.annotation.Nullable;
+
+/** This service listens for events from the watch. */
 public class WatchListenerService extends WearableListenerService {
   private static final String TAG = "WatchListenerService";
 
-  private MyLocationListener locationListener;
   private GoogleApiClient apiClient;
   private NotificationGenerator notificationGenerator;
   private boolean isConnectedToWifi;
   private Handler handler;
+  private Location lastLocation;
+  private ArrayList<String> watchNodes = new ArrayList<>();
 
   private static final long AUTO_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
   @Override
   public void onCreate() {
     super.onCreate();
-    locationListener = new MyLocationListener();
+    Log.d(TAG, "onCreate()");
 
     apiClient = new GoogleApiClient.Builder(this)
         .addApi(LocationServices.API)
-        .addConnectionCallbacks(locationListener)
-        .addOnConnectionFailedListener(locationListener)
+        .addApi(Wearable.API)
+        .addConnectionCallbacks(connectionCallbacks)
         .build();
     apiClient.connect();
 
@@ -65,6 +68,9 @@ public class WatchListenerService extends WearableListenerService {
 
     WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
     isConnectedToWifi = (wifiManager.getConnectionInfo() != null);
+
+    // Make sure we are started as well.
+    startService(new Intent(this, WatchListenerService.class));
   }
 
   @Override
@@ -74,22 +80,18 @@ public class WatchListenerService extends WearableListenerService {
   }
 
   @Override
-  public void onDataChanged(DataEventBuffer dataEvents) {
-    Log.d(TAG, "onDataChanged");
-    final List<DataEvent> events = FreezableUtils.freezeIterable(dataEvents);
-    for (DataEvent event : events) {
-      DataMapItem dataItem = DataMapItem.fromDataItem(event.getDataItem());
-      Log.d(TAG, "onDataChanged(" + dataItem.getUri() + ")");
-      if (dataItem.getUri().getPath().equals("/steptastic/steps")) {
-        int steps = dataItem.getDataMap().getInt("steps");
-        long timestamp = dataItem.getDataMap().getLong("timestamp");
-        Log.d(TAG, "Got value: " + steps + " timestamp " + timestamp);
+  public void onMessageReceived(MessageEvent msgEvent) {
+    Log.d(TAG, "onMessageReceived");
+    if (msgEvent.getPath().equals("/steptastic/steps")) {
 
-        Location loc = locationListener.isConnected()
-            ? locationListener.getLastLocation() : null;
-        StepDataStore.i.addSteps(timestamp, steps, loc);
-        notificationGenerator.setCurrentStepCount(StepDataStore.i.getStepsToday());
-      }
+      ByteBuffer bb = ByteBuffer.wrap(msgEvent.getData());
+      int steps = bb.getInt();
+      long timestamp = bb.getLong();
+      Log.d(TAG, "Got value: " + steps + " timestamp " + timestamp);
+
+      Location loc = lastLocation;
+      StepDataStore.i.addSteps(timestamp, steps, loc);
+      notificationGenerator.setCurrentStepCount(StepDataStore.i.getStepsToday());
     }
   }
 
@@ -147,22 +149,49 @@ public class WatchListenerService extends WearableListenerService {
     }
   };
 
-  private class MyLocationListener implements GoogleApiClient.ConnectionCallbacks,
-      GoogleApiClient.OnConnectionFailedListener, LocationListener {
-    private boolean isConnected;
-    private Location lastLocation;
+  private void connectToWatch() {
+    Wearable.NodeApi.getConnectedNodes(apiClient).setResultCallback(
+        new ResultCallback<NodeApi.GetConnectedNodesResult>() {
+          @Override
+          public void onResult(@NonNull NodeApi.GetConnectedNodesResult result) {
+            Log.d(TAG, "Got connected nodes (" + result.getNodes().size() + " nodes)");
+            for (Node node : result.getNodes()) {
+              watchNodes.add(node.getId());
+            }
 
-    public boolean isConnected() {
-      return isConnected;
+            sendMessage("/steptastic/StartCounting", null);
+          }
+        });
+  }
+
+  @Override
+  public void onPeerConnected(Node peer) {
+    Log.d(TAG, "onPeerConnected: " + peer.getId() + " " + peer.getDisplayName());
+  }
+
+  @Override
+  public void onPeerDisconnected(Node peer) {
+    Log.d(TAG, "onPeerDisconnected: " + peer.getId() + " " + peer.getDisplayName());
+  }
+
+  private void sendMessage(String path, @Nullable byte[] payload) {
+    if (watchNodes.isEmpty()) {
+      Log.d(TAG, "Cannot send message, watch not connected: " + path);
+    } else {
+      Log.d(TAG, "Sending message: " + path);
+      for (String watchNode : watchNodes) {
+        Wearable.MessageApi.sendMessage(apiClient, watchNode, path, payload);
+      }
     }
+  }
 
-    public Location getLastLocation() {
-      return lastLocation;
-    }
-
+  private final GoogleApiClient.ConnectionCallbacks connectionCallbacks
+      = new GoogleApiClient.ConnectionCallbacks() {
     @Override
     public void onConnected(Bundle bundle) {
-      Log.d(TAG, "Location.onConnected");
+      Log.d(TAG, "onConnected()");
+      connectToWatch();
+
       boolean hasFineLocation = ActivityCompat.checkSelfPermission(WatchListenerService.this,
           Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
       boolean hasCoarseLocation = ActivityCompat.checkSelfPermission(WatchListenerService.this,
@@ -176,27 +205,21 @@ public class WatchListenerService extends WearableListenerService {
               .setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY)
               .setFastestInterval(60 * 1000) // at most once a minute
               .setInterval(10 * 60 * 1000), // at least once every 10 minutes
-          this);
-      isConnected = true;
+          locationListener);
     }
 
     @Override
     public void onConnectionSuspended(int i) {
-      Log.d(TAG, "Location.onConnectionSuspended");
-      isConnected = false;
+      Log.d(TAG, "onConnectionSuspended()");
+      lastLocation = null;
+      watchNodes.clear();
     }
+  };
 
-    @Override
-    public void onConnectionFailed(ConnectionResult connectionResult) {
-      Log.d(TAG, "Location.onConnectionFailed");
-      isConnected = false;
-      // TODO: handler errors?
-    }
-
+  private final LocationListener locationListener = new LocationListener() {
     @Override
     public void onLocationChanged(Location location) {
       lastLocation = location;
     }
-  }
-
+  };
 }

@@ -1,10 +1,11 @@
 # Files to ignore for Android Studio
 .gradle
 /local.properties
-/.idea/workspace.xml
-/.idea/libraries
+/.idea/
 .DS_Store
 /build
+*.iml
+
 
 # Ignore apks
 *.apk

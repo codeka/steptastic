@@ -7,6 +7,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.IBinder;
+import android.util.Log;
 
 import java.util.concurrent.TimeUnit;
 import java.util.Date;
@@ -15,6 +16,7 @@ import java.util.Date;
  * This is a service which listens to the TYPE_STEP_COUNTER sensor to gather step count information.
  */
 public class StepSensorService extends Service {
+  private static final String TAG = "StepSensorService";
   private SensorManager sensorManager;
   private Sensor stepCounterSensor;
   private StepCountSyncer stepCountSyncer;
@@ -28,6 +30,8 @@ public class StepSensorService extends Service {
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
+    Log.d(TAG, "onStartCommand()");
+    stepCountSyncer.connect();
     return START_STICKY;
   }
 
