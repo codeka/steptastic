@@ -1,16 +1,20 @@
 package au.com.codeka.steptastic;
 
+import android.Manifest;
 import android.accounts.AccountManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.content.ContextCompat;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.widget.CheckBox;
@@ -26,6 +30,7 @@ public class SettingsActivity extends FragmentActivity {
   private static final String TAG = "SettingsActivity";
 
   private static final int REQUEST_ACCOUNT_PICKER = 132;
+  private static final int GET_ACCOUNTS_PERMISSION = 133;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -52,6 +57,22 @@ public class SettingsActivity extends FragmentActivity {
     }
   }
 
+  @Override
+  public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    switch(requestCode) {
+      case GET_ACCOUNTS_PERMISSION:
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+          getSyncCredentials();
+        } else {
+          Log.d(TAG, "Didn't get permission.");
+          for (int i = 0; i < permissions.length; i++) {
+            Log.d(TAG, "  " + permissions[i] + " " + grantResults[i]);
+          }
+        }
+        break;
+    }
+  }
+
   private void getSyncCredentials() {
     GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(this,
         "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
@@ -63,14 +84,13 @@ public class SettingsActivity extends FragmentActivity {
       return;
     }
 
-    SharedPreferences settings
-        = PreferenceManager.getDefaultSharedPreferences(this);
+    SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
     settings.edit()
         .putString(StepSyncer.PREF_ACCOUNT_NAME, accountName)
-        .commit();
+        .apply();
 
     // We'll want to initiate a full sync now, too.
-    StepSyncer.sync(this, true);
+    StepSyncer.fullSync(this);
   }
 
   public static class SettingsFragment extends PreferenceFragment {
@@ -93,7 +113,19 @@ public class SettingsActivity extends FragmentActivity {
             @Override
             public boolean onPreferenceChange(Preference preference, Object newValue) {
               if (((Boolean) newValue) == true) {
-                ((SettingsActivity) getActivity()).getSyncCredentials();
+                boolean hasContacts = ContextCompat.checkSelfPermission(
+                    getActivity(), Manifest.permission.WRITE_CONTACTS)
+                    == PackageManager.PERMISSION_GRANTED;
+                if (!hasContacts) {
+                  Log.d(TAG, "Requesting READ_CONTACTS and WRITE_CONTACTS permission...");
+                  // need contacts permissions first
+                  ActivityCompat.requestPermissions(
+                      getActivity(),
+                      new String[] { Manifest.permission.GET_ACCOUNTS },
+                      GET_ACCOUNTS_PERMISSION);
+                } else {
+                  ((SettingsActivity) getActivity()).getSyncCredentials();
+                }
               }
               return true;
             }

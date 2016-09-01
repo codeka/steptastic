@@ -1,9 +1,15 @@
 package au.com.codeka.steptastic;
 
+import android.Manifest;
+import android.app.Activity;
+import android.app.Service;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
 import com.appspot.steptastic_wear.syncsteps.Syncsteps;
@@ -74,16 +80,36 @@ public class StepSyncer {
   /**
    * Performs a sync, without notifying the caller. Used by the background service.
    */
-  public static void sync(Context context, boolean fullSync) {
+  public static void fullSync(Activity activity) {
+    sync(activity, true);
+  }
+
+  /**
+   * Performs a sync, without notifying the caller. Used by the background service.
+   */
+  public static void backgroundSync(Context context) {
+    sync(context, false);
+  }
+
+  private static void sync(Context context, boolean fullSync) {
     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
     GoogleAccountCredential credential = GoogleAccountCredential.usingAudience(context,
         "server:client_id:988087637760-6rhh5v6lhgjobfarparsomd4gectmk1v.apps.googleusercontent.com");
     String accountName = preferences.getString(PREF_ACCOUNT_NAME, null);
-    if (accountName == null) {
+    if (accountName == null || accountName.isEmpty()) {
       // If you haven't set up an account yet, then we can't sync anyway.
       Log.w(TAG, "No account set, cannot sync!");
       return;
     }
+
+    boolean hasGetAccountsPermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.GET_ACCOUNTS) == PackageManager.PERMISSION_GRANTED;
+    if (!hasGetAccountsPermission) {
+      Log.w(TAG, "Don't have GET_ACCOUNTS permission, can't sync.");
+      return;
+    }
+
+    Log.d(TAG, "Using account: " + accountName);
     credential.setSelectedAccountName(accountName);
 
     Syncsteps.Builder builder = new Syncsteps.Builder(
@@ -91,6 +117,7 @@ public class StepSyncer {
     builder.setApplicationName("Steptastic");
     new StepSyncer(context, builder.build(), fullSync).sync();
   }
+
 
   /**
    * Performs the actual sync, runs in a background thread.

@@ -24,8 +24,8 @@ android {
         applicationId 'au.com.codeka.steptastic'
         minSdkVersion 19
         targetSdkVersion 23
-        versionCode 5
-        versionName '1.1.1'
+        versionCode 7
+        versionName '1.2.1'
     }
     lintOptions {
         checkReleaseBuilds false
@@ -37,10 +37,11 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     wearApp project(':wear')
+    compile 'com.google.android.gms:play-services-auth:9.4.0'
     compile 'com.google.android.gms:play-services-wearable:9.4.0'
     compile 'com.google.android.gms:play-services-maps:9.4.0'
     compile 'com.google.android.gms:play-services-location:9.4.0'
-    compile 'com.android.support:appcompat-v7:24.1.1'
+    compile 'com.android.support:appcompat-v7:24.2.0'
 
     // BEGIN Google APIs
     // The following lines implement maven imports as defined at:
@@ -62,7 +63,7 @@ dependencies {
                 // Exclude play services, since we're not using this yet.
                 exclude(group: 'com.google.android.google-play-services', module: 'google-play-services')
             }
-    compile 'com.google.http-client:google-http-client-gson:1.18.+'
+    compile 'com.google.http-client:google-http-client-gson:1.20.0'
     // END Google APIs
     // The following client libraries make HTTP/JSON on Android easier.
     // Android extensions for Google HTTP Client.

@@ -57,16 +57,16 @@ public class StepCountSyncer {
     bb.putLong(timestamp);
     byte[] payload = bb.array();
 
-    sendMessage("/steptastic/steps", payload);
+    sendMessage("/steptastic/steps", String.format("%d %d", steps, timestamp), payload);
   }
 
-  private void sendMessage(String path, @Nullable byte[] payload) {
+  private void sendMessage(String path, String debug, @Nullable byte[] payload) {
     if (watchNodes.isEmpty()) {
       Log.d(TAG, "Queuing message: " + path);
-      pendingMessages.add(new Message(path, payload));
+      pendingMessages.add(new Message(path, debug, payload));
     } else {
-      Log.d(TAG, "Sending message: " + path);
       for (String watchNode : watchNodes) {
+        Log.d(TAG, "Sending message to " + watchNode + ": " + path);
         Wearable.MessageApi.sendMessage(apiClient, watchNode, path, payload);
       }
     }
@@ -74,10 +74,12 @@ public class StepCountSyncer {
 
   public static class Message {
     private final String path;
+    private final String debug;
     private final byte[] payload;
 
-    public Message(String path, byte[] payload) {
+    public Message(String path, String debug, byte[] payload) {
       this.path = path;
+      this.debug = debug;
       this.payload = payload;
     }
 
@@ -87,6 +89,11 @@ public class StepCountSyncer {
 
     public byte[] getPayload() {
       return payload;
+    }
+
+    @Override
+    public String toString() {
+      return debug;
     }
   }
 
@@ -100,12 +107,16 @@ public class StepCountSyncer {
             @Override
             public void onResult(@NonNull NodeApi.GetConnectedNodesResult result) {
               Log.d(TAG, "Got connected nodes (" + result.getNodes().size() + " nodes)");
+              watchNodes.clear();
               for (Node node : result.getNodes()) {
                 watchNodes.add(node.getId());
               }
 
               for (Message pendingMessage : pendingMessages) {
-                sendMessage(pendingMessage.getPath(), pendingMessage.getPayload());
+                sendMessage(
+                    pendingMessage.getPath(),
+                    pendingMessage.toString(),
+                    pendingMessage.getPayload());
               }
               pendingMessages.clear();
             }

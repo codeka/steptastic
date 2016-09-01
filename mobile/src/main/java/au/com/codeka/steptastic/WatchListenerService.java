@@ -50,13 +50,6 @@ public class WatchListenerService extends WearableListenerService {
     super.onCreate();
     Log.d(TAG, "onCreate()");
 
-    apiClient = new GoogleApiClient.Builder(this)
-        .addApi(LocationServices.API)
-        .addApi(Wearable.API)
-        .addConnectionCallbacks(connectionCallbacks)
-        .build();
-    apiClient.connect();
-
     notificationGenerator = new NotificationGenerator();
     handler = new Handler();
 
@@ -77,6 +70,22 @@ public class WatchListenerService extends WearableListenerService {
   public void onDestroy() {
     super.onDestroy();
     apiClient.disconnect();
+  }
+
+  @Override
+  public int onStartCommand(Intent intent, int flags, int startId) {
+    if (apiClient != null) {
+      apiClient.disconnect();
+    }
+
+    apiClient = new GoogleApiClient.Builder(this)
+        .addApi(LocationServices.API)
+        .addApi(Wearable.API)
+        .addConnectionCallbacks(connectionCallbacks)
+        .build();
+    apiClient.connect();
+
+    return super.onStartCommand(intent, flags, startId);
   }
 
   @Override
@@ -118,7 +127,7 @@ public class WatchListenerService extends WearableListenerService {
       return;
     }
 
-    StepSyncer.sync(this, false);
+    StepSyncer.backgroundSync(this);
     postMaybeSyncToCloudRunnable(AUTO_SYNC_INTERVAL_MS);
   }
 

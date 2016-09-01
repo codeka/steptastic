@@ -1,15 +1,19 @@
 package au.com.codeka.steptastic;
 
+import android.Manifest;
+import android.accounts.AccountManager;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
@@ -62,6 +66,8 @@ public class DailyStepsActivity extends FragmentActivity {
   private static final long DAYS = 1000 * 60 * 60 * 24;
   private static final long AUTO_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
+  private static final int LOCATION_PERMISSION = 135;
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -94,6 +100,28 @@ public class DailyStepsActivity extends FragmentActivity {
     updateSyncStatus(null);
     refreshStepCount(StepDataStore.i.getStepsToday());
     maybeStartSyncing();
+
+    boolean hasFineLocation = ActivityCompat.checkSelfPermission(this,
+        Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    boolean hasCoarseLocation = ActivityCompat.checkSelfPermission(this,
+        Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    if (!hasFineLocation && !hasCoarseLocation) {
+      ActivityCompat.requestPermissions(
+          this,
+          new String[] { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION },
+          LOCATION_PERMISSION);
+    }
+  }
+
+  @Override
+  protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    super.onActivityResult(requestCode, resultCode, data);
+
+    switch (requestCode) {
+      case LOCATION_PERMISSION:
+        startService(new Intent(this, WatchListenerService.class));
+        break;
+    }
   }
 
   @Override
@@ -153,7 +181,7 @@ public class DailyStepsActivity extends FragmentActivity {
       return;
     }
 
-    StepSyncer.sync(this, false);
+    StepSyncer.backgroundSync(this);
   }
 
   private void saveCameraPosition() {
