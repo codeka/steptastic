@@ -1,25 +1,20 @@
 package au.com.codeka.steptastic;
 
-import android.Manifest;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 
-import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.NodeApi;
-import com.google.android.gms.wearable.PutDataMapRequest;
-import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Locale;
 
 /**
  * This class syncs the step counter with the phone.
@@ -57,7 +52,7 @@ public class StepCountSyncer {
     bb.putLong(timestamp);
     byte[] payload = bb.array();
 
-    sendMessage("/steptastic/steps", String.format("%d %d", steps, timestamp), payload);
+    sendMessage("/steptastic/steps", String.format(Locale.US, "%d %d", steps, timestamp), payload);
   }
 
   private void sendMessage(String path, String debug, @Nullable byte[] payload) {

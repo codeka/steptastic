@@ -3,7 +3,6 @@ package au.com.codeka.steptastic;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.wearable.view.WatchViewStub;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
@@ -29,14 +28,8 @@ public class StepsActivity extends Activity {
     handler = new Handler();
     handler.postDelayed(updateRunnable, 1000);
 
-    final WatchViewStub stub = (WatchViewStub) findViewById(R.id.watch_view_stub);
-    stub.setOnLayoutInflatedListener(new WatchViewStub.OnLayoutInflatedListener() {
-      @Override
-      public void onLayoutInflated(WatchViewStub stub) {
-        stepsTextView = (TextView) stub.findViewById(R.id.text);
-        timestampTextView = (TextView) stub.findViewById(R.id.timestamp);
-      }
-    });
+    stepsTextView = findViewById(R.id.text);
+    timestampTextView = findViewById(R.id.timestamp);
   }
 
   @Override
