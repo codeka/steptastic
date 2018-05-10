@@ -9,7 +9,7 @@ import android.util.Log;
 
 /**
  * This {@link BroadcastReceiver} receives intent every now and then which we use to ensure the
- * {@StepSensorService} is still running and receiving events.
+ * {@link StepSensorService} is still running and receiving events.
  */
 public class AlarmReceiver extends BroadcastReceiver {
   private static final String TAG = AlarmReceiver.class.getSimpleName();
